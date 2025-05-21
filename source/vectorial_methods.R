@@ -413,25 +413,35 @@ basis_stable <- function(X, method = "pls", test = "kpss", alpha = 0.05, crit = 
 }
 
 # scores rebuilt
-scores_rebuilt<-function(X, scores, Y = NULL){
+scores_rebuilt<-function(scores, Y = NULL, method = "reg"){
   if(is.null(scores)){
     return(NULL)
   }
   if(is.null(Y)){  
-    # OLS coefficient
-    beta <- MASS::ginv(t(scores)%*%scores)%*%t(scores)%*%X
-
+    if(method == "PLS"){
+      c_vec <- scale(t(X)%*%scores,center=FALSE,scale = apply(scores,2,function(x) sum(x^2)))
+      X_est <- scores%*%t(c_vec)
+    }
+    else{
+      # OLS coefficient
+      beta <- MASS::ginv(t(scores)%*%scores)%*%t(scores)%*%X
+      X_est<- scores%*%beta
+    }
     # estimacion -prediccion
-    X_est<- scores%*%beta
     colnames(X_est)<- colnames(X) ; rownames(X_est)<-NULL
     return(list(est=X_est))
   } 
   else{ 
-    # OLS coefficient
-    beta <- MASS::ginv(t(scores)%*%scores)%*%t(scores)%*%Y
-
+     if(method == "PLS"){
+      c_vec <- scale(t(Y)%*%scores,center=FALSE,scale = apply(scores,2,function(x) sum(x^2)))
+      Y_est <- scores%*%t(c_vec)
+    }
+    else{
+      # OLS coefficient
+      beta <- MASS::ginv(t(scores)%*%scores)%*%t(scores)%*%Y
+      Y_est<- scores%*%beta
+    }
     # estimation
-    Y_est<- scores%*%beta
     colnames(Y_est)<- colnames(Y) ; rownames(Y_est)<-NULL
     return(list(est=Y_est))
   } 

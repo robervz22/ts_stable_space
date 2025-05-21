@@ -45,3 +45,69 @@ VNMSE_ <- function(X,X_est){
   variances <- apply(X,2,var)
   return(deviations/variances)
 }
+
+# visualise estimations
+plot_estimates_comparison <- function(Y_obs, Y_est_list, col_names,
+                                      labels = NULL, dates = NULL,
+                                      method_palette = NULL) {
+  library(ggplot2)
+  library(data.table)
+  
+  Y_obs <- as.data.table(Y_obs)
+  n <- nrow(Y_obs)
+  
+  if (is.null(dates)) {
+    dates <- 1:n
+  }
+  
+  if (is.null(labels)) {
+    labels <- names(Y_est_list)
+  }
+  
+  # Combine estimated values
+  plot_data <- rbindlist(lapply(seq_along(Y_est_list), function(i) {
+    est <- as.data.table(Y_est_list[[i]])
+    dt_list <- lapply(col_names, function(col) {
+      data.table(
+        date = dates,
+        value = est[[col]],
+        variable = col,
+        method = labels[i]
+      )
+    })
+    rbindlist(dt_list)
+  }))
+  
+  # Add observed values
+  obs_data <- rbindlist(lapply(col_names, function(col) {
+    data.table(
+      date = dates,
+      value = Y_obs[[col]],
+      variable = col,
+      method = "Observed"
+    )
+  }))
+  
+  # Combine all
+  full_data <- rbind(plot_data, obs_data)
+  
+  # Default colour palette if not supplied
+  if (is.null(method_palette)) {
+    method_palette <- c(
+      "Observed" = "black",
+      "PLS" = "#1b9e77",
+      "PCA" = "#d95f02",
+      "Johansen" = "#7570b3"
+    )
+  }
+
+  # Plot
+  ggplot(full_data, aes(x = date, y = value, colour = method)) +
+    geom_line() +
+    facet_wrap(~variable, scales = "free_y", ncol = 1) +
+    scale_colour_manual(values = method_palette) +
+    theme_minimal() +
+    labs(title = "",
+         x = "Time", y = "Value", colour = "Method")+mytheme
+}
+
