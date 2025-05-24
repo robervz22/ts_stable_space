@@ -50,10 +50,10 @@ VNMSE_ <- function(X,X_est){
 plot_estimates_comparison <- function(Y_obs, Y_est_list, col_names,
                                       labels = NULL, dates = NULL,
                                       method_palette = NULL) {
-  library(ggplot2)
-  library(data.table)
+  # library(ggplot2)
+  # library(data.table)
   
-  Y_obs <- as.data.table(Y_obs)
+  Y_obs <- data.table::as.data.table(Y_obs)
   n <- nrow(Y_obs)
   
   if (is.null(dates)) {
@@ -66,9 +66,9 @@ plot_estimates_comparison <- function(Y_obs, Y_est_list, col_names,
   
   # Combine estimated values
   plot_data <- rbindlist(lapply(seq_along(Y_est_list), function(i) {
-    est <- as.data.table(Y_est_list[[i]])
+    est <- data.table::as.data.table(Y_est_list[[i]])
     dt_list <- lapply(col_names, function(col) {
-      data.table(
+      data.table::data.table(
         date = dates,
         value = est[[col]],
         variable = col,
@@ -80,7 +80,7 @@ plot_estimates_comparison <- function(Y_obs, Y_est_list, col_names,
   
   # Add observed values
   obs_data <- rbindlist(lapply(col_names, function(col) {
-    data.table(
+    data.table::data.table(
       date = dates,
       value = Y_obs[[col]],
       variable = col,
@@ -108,6 +108,6 @@ plot_estimates_comparison <- function(Y_obs, Y_est_list, col_names,
     scale_colour_manual(values = method_palette) +
     theme_minimal() +
     labs(title = "",
-         x = "Time", y = "Value", colour = "Method")+mytheme
+         x = "Date", y = latex2exp::TeX(r'($X_n$)'), colour = "Method")+mytheme
 }
 
