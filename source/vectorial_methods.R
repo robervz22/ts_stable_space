@@ -337,10 +337,10 @@ basis_stable <- function(X, method = "pls", test = "kpss", alpha = 0.05, crit = 
 
       if(length(stationary_components)>0){
         basis_S <- basis$PLS_w[,index_stationary] 
-        basis_N <- basis$PLS_w[,index_stationary]
+        basis_N <- basis$PLS_w[,-index_stationary]
         scores_S <- T_scores[,index_stationary]
         weights_S <- basis$PLS_vecs[,index_stationary]
-        weights_N <- basis$PLS_vecs[,index_stationary]
+        weights_N <- basis$PLS_vecs[,-index_stationary]
         return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N),stable_scores = as.matrix(scores_S),
                     weights_S = weights_S, weights_N = weights_N))
       }
@@ -354,7 +354,7 @@ basis_stable <- function(X, method = "pls", test = "kpss", alpha = 0.05, crit = 
 
       if(length(stationary_components)>0){
         basis_S <- basis$PLS_w[,index_stationary] 
-        basis_N <- basis$PLS_w[,index_stationary]
+        basis_N <- basis$PLS_w[,-index_stationary]
         scores_S <- T_scores[,index_stationary]
         return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N), stable_scores = as.matrix(scores_S)))
       }
@@ -375,7 +375,7 @@ basis_stable <- function(X, method = "pls", test = "kpss", alpha = 0.05, crit = 
 
       if(length(stationary_components)>0){
         basis_S <- basis[,index_stationary]
-        basis_N <- basis[,index_stationary]
+        basis_N <- basis[,-index_stationary]
         return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N)))
       }
       else{
@@ -389,7 +389,7 @@ basis_stable <- function(X, method = "pls", test = "kpss", alpha = 0.05, crit = 
 
       if(length(stationary_components)>0){
         basis_S <- basis[,index_stationary]
-        basis_N <- basis[,index_stationary]
+        basis_N <- basis[,-index_stationary]
         return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N)))
       }
       else{
