@@ -49,10 +49,7 @@ VNMSE_ <- function(X,X_est){
 # visualise estimations
 plot_estimates_comparison <- function(Y_obs, Y_est_list, col_names,
                                       labels = NULL, dates = NULL,
-                                      method_palette = NULL) {
-  # library(ggplot2)
-  # library(data.table)
-  
+                                      method_palette = NULL) {  
   Y_obs <- data.table::as.data.table(Y_obs)
   n <- nrow(Y_obs)
   
