@@ -289,7 +289,6 @@ pls_alg <- function(X,setX=NULL,setY=NULL) {
   }
   for (i in 1:m) {
     # STEP 1
-    N <- ncol(tX) ; m <- nrow(tX)
     aux_Psi <- (tX %*% t(tY))
     result <- eigen(aux_Psi%*%t(aux_Psi))
     w <- as.matrix(result$vectors[,1])
