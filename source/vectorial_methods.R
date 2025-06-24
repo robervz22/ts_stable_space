@@ -1,23 +1,3 @@
-#################
-# ggplot2 setup #
-#################
-mysize <- 12
-custom_palette <- RColorBrewer::brewer.pal(9, "Set1")
-mytheme <- ggplot2::theme_bw() + # bw theme
-  ggplot2::theme(
-    axis.title = ggplot2::element_text(size = mysize),
-    axis.text = ggplot2::element_text(size = mysize),
-    legend.title = ggplot2::element_text(size = mysize),
-    legend.text = ggplot2::element_text(size = mysize),
-    legend.key = ggplot2::element_rect(fill = NA),
-    plot.title = ggplot2::element_text(hjust = 0.5, size = 16),
-    plot.subtitle = ggplot2::element_text(hjust = 0.5, size = 14),
-    panel.grid.minor.x = ggplot2::element_blank(),
-    panel.grid.major.x = ggplot2::element_blank()
-  )
-
-options(repr.plot.width = 10, repr.plot.height = 6) # plots width and heigth
-
 ################
 # main methods #
 ################

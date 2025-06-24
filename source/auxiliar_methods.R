@@ -1,3 +1,23 @@
+#################
+# ggplot2 setup #
+#################
+mysize <- 12
+custom_palette <- RColorBrewer::brewer.pal(9, "Set1")
+mytheme <- ggplot2::theme_bw() + # bw theme
+  ggplot2::theme(
+    axis.title = ggplot2::element_text(size = mysize),
+    axis.text = ggplot2::element_text(size = mysize),
+    legend.title = ggplot2::element_text(size = mysize),
+    legend.text = ggplot2::element_text(size = mysize),
+    legend.key = ggplot2::element_rect(fill = NA),
+    plot.title = ggplot2::element_text(hjust = 0.5, size = 16),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5, size = 14),
+    panel.grid.minor.x = ggplot2::element_blank(),
+    panel.grid.major.x = ggplot2::element_blank()
+  )
+
+options(repr.plot.width = 10, repr.plot.height = 6) # plots width and heigth
+
 ######################
 # auxiliar functions #
 ######################
@@ -49,7 +69,7 @@ VNMSE_ <- function(X,X_est){
 # visualise estimations
 plot_estimates_comparison <- function(Y_obs, Y_est_list, col_names,
                                       labels = NULL, dates = NULL,
-                                      method_palette = NULL) {  
+                                      method_palette = NULL, method_linetypes = NULL) {  
   Y_obs <- data.table::as.data.table(Y_obs)
   n <- nrow(Y_obs)
   
@@ -89,22 +109,18 @@ plot_estimates_comparison <- function(Y_obs, Y_est_list, col_names,
   full_data <- rbind(plot_data, obs_data)
   
   # Default colour palette if not supplied
-  if (is.null(method_palette)) {
-    method_palette <- c(
-      "Observed" = "black",
-      "PLS" = "#1b9e77",
-      "PCA" = "#d95f02",
-      "Johansen" = "#7570b3"
-    )
+  if (is.null(method_palette) | is.null(method_linetypes)) {
+    stop("Method palette or linetypes not supplied")
   }
 
   # Plot
-  ggplot(full_data, aes(x = date, y = value, colour = method)) +
+  ggplot(full_data, aes(x = date, y = value, colour = method, linetype = method)) +
     geom_line() +
     facet_wrap(~variable, scales = "free_y", ncol = 1) +
     scale_colour_manual(values = method_palette) +
+    scale_linetype_manual(values = method_linetypes)+
     theme_minimal() +
     labs(title = "",
-         x = "Date", y = latex2exp::TeX(r'($X_n$)'), colour = "Method")+mytheme
+         x = "Date", y = latex2exp::TeX(r'($X_n$)'), colour = "Method", linetype = "Method")+mytheme
 }
 
