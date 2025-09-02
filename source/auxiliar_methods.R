@@ -1,22 +1,19 @@
 #################
 # ggplot2 setup #
 #################
-mysize <- 12
-custom_palette <- RColorBrewer::brewer.pal(9, "Set1")
-mytheme <- ggplot2::theme_bw() + # bw theme
-  ggplot2::theme(
-    axis.title = ggplot2::element_text(size = mysize),
-    axis.text = ggplot2::element_text(size = mysize),
-    legend.title = ggplot2::element_text(size = mysize),
-    legend.text = ggplot2::element_text(size = mysize),
-    legend.key = ggplot2::element_rect(fill = NA),
-    plot.title = ggplot2::element_text(hjust = 0.5, size = 16),
-    plot.subtitle = ggplot2::element_text(hjust = 0.5, size = 14),
-    panel.grid.minor.x = ggplot2::element_blank(),
-    panel.grid.major.x = ggplot2::element_blank()
+mysize <- 14 # base font size
+mytheme <- theme_bw(base_size = mysize) + 
+  theme(
+    axis.title = element_text(size = rel(1.2), face = "bold"),
+    axis.text = element_text(size = rel(1), face = "bold"),
+    legend.title = element_text(size = rel(1.1), face = "bold"),
+    legend.text = element_text(size = rel(1), face = "bold"),
+    plot.title = element_text(size = rel(1.4), hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(size = rel(1.2), hjust = 0.5, face = "bold"),
+    plot.caption = element_text(size = rel(0.8), hjust = 0.5, face = "bold")
   )
 
-options(repr.plot.width = 10, repr.plot.height = 6) # plots width and heigth
+# options(repr.plot.width = 10, repr.plot.height = 6) # plots width and heigth
 
 ######################
 # auxiliar functions #

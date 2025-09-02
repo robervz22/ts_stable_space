@@ -2,38 +2,57 @@
 # simulations #
 ###############
 
-# Grassman distance for subspaces with different dimensions
+# Grassmann distance for subspaces (allows different dimensions and NULL)
 grassmann_distance <- function(S1, S2) {
-  # Ensure the inputs are matrices
-  if (!is.matrix(S1) || !is.matrix(S2)) {
-    stop("Inputs must be matrices (orthonormal bases).")
+  
+  # Treat NULL as zero-dimensional subspaces
+  if (is.null(S1) && is.null(S2)) return(0)
+
+  if (is.null(S1)) {
+    if (!is.matrix(S2)) stop("S2 must be a matrix or NULL.")
+    return(sqrt(ncol(S2)) * (pi / 2))
+  }
+  if (is.null(S2)) {
+    if (!is.matrix(S1)) stop("S1 must be a matrix or NULL.")
+    return(sqrt(ncol(S1)) * (pi / 2))
   }
 
-  n1 <- ncol(S1)
-  n2 <- ncol(S2)
-  d <- min(n1, n2)
-  k <- abs(n1 - n2)
+  # Ensure the inputs are matrices
+  if (!is.matrix(S1) || !is.matrix(S2)) {
+    stop("Inputs must be matrices (orthonormal bases) or NULL.")
+  }
 
-  # Check dimensional compatibility
+  # Ambient dimension check
   if (nrow(S1) != nrow(S2)) {
     stop("Both bases must be in the same ambient space (same number of rows).")
   }
 
-  # Compute the principal angles using SVD
-  svd_result <- svd(t(S1) %*% S2)
+  n1 <- ncol(S1)
+  n2 <- ncol(S2)
+  d  <- min(n1, n2)
+  k  <- abs(n1 - n2)
+
+  # If one (or both) subspaces are zero-dimensional, skip SVD
+  if (d == 0) {
+    return(sqrt(k) * (pi / 2))
+  }
+
+  # Compute principal angles via SVD of cross-basis matrix
+  C <- t(S1) %*% S2
+  svd_result <- svd(C, nu = 0, nv = 0)
   cos_theta <- svd_result$d[1:d]
   cos_theta <- pmin(pmax(cos_theta, -1), 1)  # numerical stability
   theta <- acos(cos_theta)
 
-  # Pad with π/2 if dimensions differ
+  # Pad with π/2 for the dimension mismatch
   if (k > 0) {
     theta <- c(theta, rep(pi / 2, k))
   }
 
-  # Grassmann distance
-  d_grassmann <- sqrt(sum(theta^2))
-  return(d_grassmann)
+  return(sqrt(sum(theta^2)))
 }
+
+
 
 # Optimised simulation function
 X_simulation <- function(seed, m, r, Tt,
@@ -99,9 +118,17 @@ X_simulation <- function(seed, m, r, Tt,
 run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
                            test = "kpss", dist = "normal",
                            persistence = "low", dependence = FALSE,
-                           trend = FALSE) {
+                           trend = FALSE,
+                           # --- new: spca controls with safe defaults ---
+                            spca_engine = c("elasticnet", "PMA"),
+                            spca_sparse = c("varnum", "penalty"), # only for elasticnet
+                            spca_k = NULL, # number of sparse components (defaults to ncol(X))
+                            spca_para = NULL, # sparsity control (engine-specific; see spca_alg docs below)
+                            spca_center = FALSE, spca_scale = FALSE) {
+
+  
   results_list <- list()
-  methods <- c("Johansen", "PLS", "PCA")
+  methods <- c("Johansen", "PLS", "PCA", "SPCA")
   i1_i2_names <- rownames(i_values)
 
 
@@ -131,41 +158,47 @@ run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
 
       for (s in 1:S) {
         # Simulate with precomputed components
-        sim_fun <- X_simulation_new(
-          seed = s, m = m, r = r, Tt = Tt + 100,
+        sim_fun <- X_simulation(
+          seed = s, m = m, r = r, Tt = Tt + 200,
           alpha = alpha, beta = beta, beta_orto = beta_orto, gamma = gamma,
           Sigma_eps = Sigma_eps, dist = dist, trend = trend, mix = TRUE
         )
         sim_data <- sim_fun(i1, i2)
 
-        X <- ts(scale(sim_data$X[101:(Tt + 100), ]))
-        XX <- X[1:(nrow(X) - 1), ]; Y <- X[2:nrow(X), ]
-
-        beta_teo <- beta
+        X <- sim_data$X[201:nrow(sim_data$X), ]  # remove burn-in
 
         iter_results <- data.frame(Method = methods, m = m, r = r,
                                    i1 = i1, i2 = i2, Case = case_name,
                                    n_coint = NA, n_norms = NA)
 
-        # Estimate cointegration basis with all 3 methods
+        # PLS, PCA, SPCA
         basis_PLS <- basis_stable(X, method = "pls", test = test)
-        basis_PCA <- basis_stable(XX, method = "pca", test = test)
+        basis_PCA <- basis_stable(scale(X), method = "pca", test = test)
+        basis_SPCA <- basis_stable(scale(X), method = "spca", test = test, 
+                                      spca_sparse = spca_sparse, 
+                                      spca_engine = spca_engine, 
+                                      spca_para = spca_para)
 
-        for (method in c("PLS", "PCA")) {
+        for (method in c("PLS", "PCA", "SPCA")) {
           basis <- get(paste0("basis_", method))
           if (!is.null(ncol(basis$basis_S))) {
             iter_results[iter_results$Method == method, "n_coint"] <- ncol(basis$basis_S) - r
-            iter_results[iter_results$Method == method, "n_norms"] <- grassmann_distance(beta_teo, basis$basis_S)
+          } else {
+            iter_results[iter_results$Method == method, "n_coint"] <- -r
           }
+          iter_results[iter_results$Method == method, "n_norms"] <- grassmann_distance(beta, basis$basis_S)
         }
 
         if (m <= 11) {
           method <- "Johansen"
-          basis_johansen <- basis_stable(XX, method = "johansen")
+          basis_johansen <- basis_stable(X, method = "johansen")
           if (!is.null(ncol(basis_johansen$basis_S))) {
             iter_results[iter_results$Method == method, "n_coint"] <- ncol(basis_johansen$basis_S) - r
-            iter_results[iter_results$Method == method, "n_norms"] <- grassmann_distance(beta_teo, basis_johansen$basis_S)
+          } else {
+            iter_results[iter_results$Method == method, "n_coint"] <- -r
           }
+          iter_results[iter_results$Method == method, "n_norms"] <- grassmann_distance(beta, basis_johansen$basis_S)
+
         }
         results_list[[length(results_list) + 1]] <- iter_results
       }
