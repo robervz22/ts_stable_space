@@ -352,9 +352,15 @@ spca_alg <- function(
     }
     # ensure para length k
     if (length(para) == 1) para <- rep(para, k)
+    # fit
+    if (k > nrow(X)){
+      fit <- elasticnet::arrayspc(G, K = k, para = para)
+    }
+    else{
+      fit <- elasticnet::spca(G, K = k, type = "Gram",
+                              sparse = sparse, para = para)
+    }
 
-    fit <- elasticnet::spca(G, K = k, type = "Gram",
-                            sparse = sparse, para = para)
     L <- fit$loadings  # m x k
     # normalise columns
     L <- apply(L, 2, function(v) if (sum(v^2) > 0) v / sqrt(sum(v^2)) else v)

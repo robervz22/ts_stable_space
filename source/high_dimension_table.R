@@ -22,20 +22,20 @@ r_values <- c(250,200,150)
 i_values <- matrix(c(300,0,250,10,200,20,150,30),nrow=4,ncol=2,byrow = TRUE)
 rownames(i_values) <- c('Case 1','Case 2','Case 3','Case 4')
 Tt <- 100 # series length
-S <- 100 # number of simulation
+S <- 1 # number of simulation
 persistence <- "low" ; dist <- "t" # persistence and innovation process distribution
 dependence <- TRUE
 seeds <- c(1,1) # seeds for reproducibility
 spca_sparse <- "penalty"  # type of sparsity: "penalty" or "varnum"
 spca_para <- 0.25 # sparsity parameter for SPCA
 spca_engine <- "elasticnet" # type of sparsity and engine for SPCA
-
+methods <- c("SPCA")
 ###############################################
 # Produce table for high-dimensional scenarios #
 ###############################################
 df_high_dimension <- run_simulation(seeds,m,r_values,i_values,Tt,S,
-                    dist = dist, persistence = persistence, dependence = dependence,
-                    spca_sparse = spca_sparse, spca_para = spca_para, spca_engine = spca_engine)
+                    dist = dist, persistence = persistence, dependence = dependence, burnin = 100, methods = methods,
+                    spca_sparse = spca_sparse, spca_para = spca_para,  spca_engine = spca_engine)
 
                 
 dt_high_dimension <- as.data.table(df_high_dimension)

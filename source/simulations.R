@@ -75,7 +75,13 @@ X_simulation <- function(seed, m, r, Tt,
     if (trend) {
       portes::varima.sim(n = Tt, k = m, sigma = Sigma_eps, trend = rep(0.05, m), innov.dist = "t", dft = 3, demean = rep(0, m))
     } else {
-      portes::varima.sim(n = Tt, k = m, sigma = Sigma_eps, innov.dist = "t", dft = 3, demean = rep(0, m))
+      p###############
+# simulations #
+###############
+
+# Grassmann distance for subspaces (allows different dimensions and NULL)
+grassmann_distance <- function(S1, S2) {
+  ortes::varima.sim(n = Tt, k = m, sigma = Sigma_eps, innov.dist = "t", dft = 3, demean = rep(0, m))
     }
   }
 
@@ -118,7 +124,7 @@ X_simulation <- function(seed, m, r, Tt,
 run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
                            test = "kpss", dist = "normal",
                            persistence = "low", dependence = FALSE,
-                           trend = FALSE,
+                           trend = FALSE,burnin = 200, methods = c("Johansen", "PLS", "PCA", "SPCA"),                          
                            # --- new: spca controls with safe defaults ---
                             spca_engine = c("elasticnet", "PMA"),
                             spca_sparse = c("varnum", "penalty"), # only for elasticnet
@@ -128,7 +134,6 @@ run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
 
   
   results_list <- list()
-  methods <- c("Johansen", "PLS", "PCA", "SPCA")
   i1_i2_names <- rownames(i_values)
 
 
@@ -158,29 +163,40 @@ run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
 
       for (s in 1:S) {
         # Simulate with precomputed components
+        start_simulation <- Sys.time()
         sim_fun <- X_simulation(
-          seed = s, m = m, r = r, Tt = Tt + 200,
+          seed = s, m = m, r = r, Tt = Tt + burnin,
           alpha = alpha, beta = beta, beta_orto = beta_orto, gamma = gamma,
           Sigma_eps = Sigma_eps, dist = dist, trend = trend, mix = TRUE
         )
         sim_data <- sim_fun(i1, i2)
 
-        X <- sim_data$X[201:nrow(sim_data$X), ]  # remove burn-in
+        X <- sim_data$X[(burnin+1):nrow(sim_data$X), ]  # remove burn-in
+        end_simulation <- Sys.time()
+        elapsed_simulation <- difftime(end_simulation, start_simulation, units = "secs")
+
+        cat("\nSimulation time: ", round(elapsed_simulation), "(s)")
 
         iter_results <- data.frame(Method = methods, m = m, r = r,
                                    i1 = i1, i2 = i2, Case = case_name,
                                    n_coint = NA, n_norms = NA)
 
-        # PLS, PCA, SPCA
-        basis_PLS <- basis_stable(X, method = "pls", test = test)
-        basis_PCA <- basis_stable(scale(X), method = "pca", test = test)
-        basis_SPCA <- basis_stable(scale(X), method = "spca", test = test, 
+        for (method in intersect(c("PLS", "PCA", "SPCA"),methods)) {
+          start_method <- Sys.time()
+          if(method == "PLS"){
+            basis <- basis_stable(X, method = "pls", test = test)
+          } else if(method == "PCA"){
+            basis <- basis_stable(scale(X), method = "pca", test = test)
+          } else if(method == "SPCA"){
+            basis <- basis_stable(scale(X), method = "spca", test = test, 
                                       spca_sparse = spca_sparse, 
                                       spca_engine = spca_engine, 
                                       spca_para = spca_para)
+          }
+          end_method <- Sys.time()
+          elapsed_method <- difftime(end_method, start_method, units = "secs")
+          cat("\n",method, " time: ",round(elapsed_method,2),"(s)")
 
-        for (method in c("PLS", "PCA", "SPCA")) {
-          basis <- get(paste0("basis_", method))
           if (!is.null(ncol(basis$basis_S))) {
             iter_results[iter_results$Method == method, "n_coint"] <- ncol(basis$basis_S) - r
           } else {
@@ -189,8 +205,7 @@ run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
           iter_results[iter_results$Method == method, "n_norms"] <- grassmann_distance(beta, basis$basis_S)
         }
 
-        if (m <= 11) {
-          method <- "Johansen"
+        if (m <= 11 && "Johansen" %in% methods) {
           basis_johansen <- basis_stable(X, method = "johansen")
           if (!is.null(ncol(basis_johansen$basis_S))) {
             iter_results[iter_results$Method == method, "n_coint"] <- ncol(basis_johansen$basis_S) - r

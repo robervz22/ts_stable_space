@@ -7,10 +7,11 @@ mytheme <- theme_bw(base_size = mysize) +
     axis.title = element_text(size = rel(1.2), face = "bold"),
     axis.text = element_text(size = rel(1), face = "bold"),
     legend.title = element_text(size = rel(1.1), face = "bold"),
-    legend.text = element_text(size = rel(1), face = "bold"),
+    legend.text = element_text(size = rel(1)),
     plot.title = element_text(size = rel(1.4), hjust = 0.5, face = "bold"),
     plot.subtitle = element_text(size = rel(1.2), hjust = 0.5, face = "bold"),
-    plot.caption = element_text(size = rel(0.8), hjust = 0.5, face = "bold")
+    plot.caption = element_text(size = rel(0.8), hjust = 0.5, face = "bold"),
+    strip.text = element_text(face = "bold")
   )
 
 # options(repr.plot.width = 10, repr.plot.height = 6) # plots width and heigth
