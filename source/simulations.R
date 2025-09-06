@@ -169,7 +169,7 @@ run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
         end_simulation <- Sys.time()
         elapsed_simulation <- difftime(end_simulation, start_simulation, units = "secs")
 
-        cat("\nSimulation time: ", round(elapsed_simulation), "(s)")
+        # cat("\nSimulation time: ", round(elapsed_simulation), "(s)")
 
         iter_results <- data.frame(Method = methods, m = m, r = r,
                                    i1 = i1, i2 = i2, Case = case_name,
@@ -189,7 +189,7 @@ run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
           }
           end_method <- Sys.time()
           elapsed_method <- difftime(end_method, start_method, units = "secs")
-          cat("\n",method, " time: ",round(elapsed_method,2),"(s)")
+          # cat("\n",method, " time: ",round(elapsed_method,2),"(s)")
 
           if (!is.null(ncol(basis$basis_S))) {
             iter_results[iter_results$Method == method, "n_coint"] <- ncol(basis$basis_S) - r
