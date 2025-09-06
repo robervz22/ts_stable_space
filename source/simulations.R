@@ -75,13 +75,7 @@ X_simulation <- function(seed, m, r, Tt,
     if (trend) {
       portes::varima.sim(n = Tt, k = m, sigma = Sigma_eps, trend = rep(0.05, m), innov.dist = "t", dft = 3, demean = rep(0, m))
     } else {
-      p###############
-# simulations #
-###############
-
-# Grassmann distance for subspaces (allows different dimensions and NULL)
-grassmann_distance <- function(S1, S2) {
-  ortes::varima.sim(n = Tt, k = m, sigma = Sigma_eps, innov.dist = "t", dft = 3, demean = rep(0, m))
+      portes::varima.sim(n = Tt, k = m, sigma = Sigma_eps, innov.dist = "t", dft = 3, demean = rep(0, m))
     }
   }
 
@@ -235,7 +229,3 @@ run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
 
   return(summary_table)
 }
-
-
-
-
