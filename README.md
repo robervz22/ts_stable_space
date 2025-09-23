@@ -47,8 +47,6 @@ First, we define the input matrices for each method:
 ```R
 X_inflation <- as.matrix(dt_inflation, rownames = "Date")
 rownames(X_inflation) <- NULL
-XX_inflation <- X_inflation[1:(nrow(X_inflation)-1),]
-Y_inflation <- X_inflation[2:nrow(X_inflation),]
 ```
 
 Then, we run the following code lines—each corresponds to one of the methods:
