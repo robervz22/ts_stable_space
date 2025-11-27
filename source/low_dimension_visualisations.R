@@ -88,8 +88,8 @@ for (pair in values_pairs) {
     ###################
     n_coint <- matrix(NA, S, 5)
     n_norms <- matrix(NA, S, 5)
-    colnames(n_coint) <- c("Johansen", "PLS", "PCA", "SPCA", "SPLS")
-    colnames(n_norms) <- c("Johansen", "PLS", "PCA", "SPCA", "SPLS")
+    colnames(n_coint) <- c("Johansen", "PLS", "PCA", "SPLS", "SPCA")
+    colnames(n_norms) <- c("Johansen", "PLS", "PCA", "SPLS", "SPCA")
 
     for (s in 1:S) {
       # Epsilon innovations
