@@ -3,12 +3,7 @@
 #########################
 remove(list = ls())
 options(warn = -1)
-library(data.table)
-library(magrittr)
-library(ggplot2)
-library(latex2exp)
-library(xtable)
-library(patchwork)
+pacman::p_load(data.table,magrittr,ggplot2,latex2exp,xtable,patchwork)
 source("./source/simulations.R")
 source("./source/vectorial_methods.R")
 source("./source/auxiliar_methods.R")
@@ -32,7 +27,18 @@ sigma <- 1 # equal variance for the non-correlated case
 spca_sparse <- "penalty"  # type of sparsity: "penalty" or "varnum"
 spca_para <- 0.25 # sparsity parameter for SPCA
 spca_engine <- "elasticnet" # type of sparsity and engine for SPCA
-methods_colors <- c("Johansen" = "#E69F00","PLS" = "#56B4E9", "PCA" = "#009E73", "SPCA" = "#CC79A7") 
+spca_para <- 0.25 # sparsity parameter for SPCA
+spca_eta <- 0.125
+spls_eta    <- spca_eta   # e.g. reuse SPCA penalty; or set manually, e.g. 0.6
+spls_kappa  <- 0.25        # ridge–lasso mixing
+
+methods_colors <- c(
+  "Johansen" = "#E69F00",  # orange
+  "PCA"      = "#009E73",  # green (mid)
+  "SPCA"     = "#58C6A3",  # green (lighter)
+  "PLS"      = "#0072B2",  # blue (mid)
+  "SPLS"     = "#66A6D2"   # blue (lighter)
+)
 
 ##################
 # Collect plots  #
@@ -80,10 +86,10 @@ for (pair in values_pairs) {
     ###################
     # Simulation loop #
     ###################
-    n_coint <- matrix(NA, S, 4)
-    n_norms <- matrix(NA, S, 4)
-    colnames(n_coint) <- c("Johansen", "PLS", "PCA", "SPCA")
-    colnames(n_norms) <- c("Johansen", "PLS", "PCA", "SPCA")
+    n_coint <- matrix(NA, S, 5)
+    n_norms <- matrix(NA, S, 5)
+    colnames(n_coint) <- c("Johansen", "PLS", "PCA", "SPCA", "SPLS")
+    colnames(n_norms) <- c("Johansen", "PLS", "PCA", "SPCA", "SPLS")
 
     for (s in 1:S) {
       # Epsilon innovations
@@ -111,46 +117,63 @@ for (pair in values_pairs) {
 
       X <- X_sim$X[201:nrow(X_sim$X), ]  # remove burn-in
 
-      # PLS, PCA, SPCA
-      basis_PLS <- basis_stable(X, method = "pls", test = test)
-      basis_PCA <- basis_stable(scale(X), method = "pca", test = test)
-      basis_SPCA <- basis_stable(scale(X), method = "spca", test = test, 
-                                    spca_sparse = spca_sparse, 
-                                    spca_engine = spca_engine, 
-                                    spca_para = spca_para)
+      # PLS, PCA, SPCA, SPLS
+      basis_PLS  <- basis_stable(X, method = "pls",  test = test)
+      basis_PCA  <- basis_stable(X, method = "pca",  test = test)
+      basis_SPCA <- basis_stable(
+        X, method = "spca", test = test,
+        # spca_sparse = spca_sparse,
+        # spca_engine = spca_engine,
+        # spca_para   = spca_para
+        spca_eta = spca_eta
+      )
+      basis_SPLS <- basis_stable(
+        X, method = "spls", test = test,
+        # spls_K      = spls_K,
+        spls_eta    = spls_eta,
+        spls_kappa  = spls_kappa
+      )
 
-      if (!is.null(ncol(basis_PLS$basis_S))){ 
+      ## PLS
+      if (!is.null(ncol(basis_PLS$basis_S))) {
         n_coint[s, "PLS"] <- ncol(basis_PLS$basis_S) - r
-      }
-      else {
+      } else {
         n_coint[s, "PLS"] <- -r
       }
 
+      ## PCA
       if (!is.null(ncol(basis_PCA$basis_S))) {
         n_coint[s, "PCA"] <- ncol(basis_PCA$basis_S) - r
-      }
-      else{
+      } else {
         n_coint[s, "PCA"] <- -r
       }
 
+      ## SPCA
       if (!is.null(ncol(basis_SPCA$basis_S))) {
         n_coint[s, "SPCA"] <- ncol(basis_SPCA$basis_S) - r
-      }
-      else{
+      } else {
         n_coint[s, "SPCA"] <- -r
       }
-      n_norms[s, "PLS"] <- grassmann_distance(beta, basis_PLS$basis_S)
-      n_norms[s, "PCA"] <- grassmann_distance(beta, basis_PCA$basis_S)
-      n_norms[s, "SPCA"] <- grassmann_distance(beta, basis_SPCA$basis_S)
 
+      ## SPLS
+      if (!is.null(ncol(basis_SPLS$basis_S))) {
+        n_coint[s, "SPLS"] <- ncol(basis_SPLS$basis_S) - r
+      } else {
+        n_coint[s, "SPLS"] <- -r
+      }
+
+      # Grassmann distances
+      n_norms[s, "PLS"]  <- grassmann_distance(beta, basis_PLS$basis_S)
+      n_norms[s, "PCA"]  <- grassmann_distance(beta, basis_PCA$basis_S)
+      n_norms[s, "SPCA"] <- grassmann_distance(beta, basis_SPCA$basis_S)
+      n_norms[s, "SPLS"] <- grassmann_distance(beta, basis_SPLS$basis_S)
 
       # Johansen
       if (m <= 11) {
         basis_johansen <- basis_stable(X, method = "johansen", ec_det = ec_det)
         if (!is.null(ncol(basis_johansen$basis_S))) {
           n_coint[s, "Johansen"] <- ncol(basis_johansen$basis_S) - r
-        }
-        else {
+        } else {
           n_coint[s, "Johansen"] <- -r
         }
         n_norms[s, "Johansen"] <- grassmann_distance(beta, basis_johansen$basis_S)
@@ -234,6 +257,16 @@ ggsave(
   filename = "./images/Figure_2.pdf",
   plot     = violin_grid,
   width    = 32, height = 16, units = "in", device = "pdf", dpi = 300, useDingbats = FALSE
+)
+ggsave(
+  filename = "./images/Figure_1.png",
+  plot     = bar_grid,
+  width    = 32, height = 16, units = "in", dpi = 300
+)
+ggsave(
+  filename = "./images/Figure_2.png",
+  plot     = violin_grid,
+  width    = 32, height = 16, units = "in", dpi = 300
 )
 
 
