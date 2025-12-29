@@ -3,16 +3,10 @@
 #########################
 remove(list = ls())
 options(warn = -1)
-library(data.table)
-library(magrittr)
-library(ggplot2)
-library(latex2exp)
-library(xtable)
-library(patchwork)
-
-source("./source/simulations.R")
+pacman::p_load(data.table,magrittr,ggplot2,latex2exp,xtable,patchwork)
 source("./source/vectorial_methods.R")
-source("./source/auxiliar_methods.R")
+source("./source/auxiliar_methods.R") 
+source("./source/simulations.R")
 
 ##############
 # Parameters #
@@ -27,15 +21,19 @@ persistence <- "low" ; dist <- "t" # persistence and innovation process distribu
 dependence <- TRUE
 seeds <- c(1,1) # seeds for reproducibility
 spca_sparse <- "penalty"  # type of sparsity: "penalty" or "varnum"
-spca_para <- 0.25 # sparsity parameter for SPCA
+spca_para <- 0.125 # sparsity parameter for SPCA
 spca_engine <- "elasticnet" # type of sparsity and engine for SPCA
+spca_eta <- 0.125
+spls_eta    <- spca_eta  # e.g. reuse SPCA penalty; or set manually, e.g. 0.6
+spls_kappa  <- 0.25      # ridge–lasso mixing
 
 ###############################################
 # Produce table for low-dimensional scenarios #
 ###############################################
 df_low_dimension <- run_simulation(seeds,m,r_values,i_values,Tt,S,
                     dist = dist, persistence = persistence, dependence = dependence,
-                    spca_sparse = spca_sparse, spca_para = spca_para, spca_engine = spca_engine)
+                    spca_sparse = spca_sparse, spca_para = spca_para, spca_engine = spca_engine,
+                    spca_eta = spca_eta, spls_eta = spls_eta, spls_kappa = spls_kappa)
 
                 
 dt_low_dimension <- as.data.table(df_low_dimension)
@@ -51,20 +49,28 @@ setnames(dt_low_dimension, old = c("mean_n_coint","mean_n_norms"),
 
 # Prepare data
 dt_aux <- copy(dt_low_dimension)
-dt_aux[, c("m", "Dimension", "X") := NULL]
+# dt_aux[, c("m", "Dimension", "X") := NULL]
+dt_aux[, c("m", "X") := NULL]
 
 # Order data
 setorder(dt_aux, -r, Method)
 
 # Format into a single long table
-dt_table <- dt_aux[, .(Method, r, Case, Subspace)]
+# dt_table <- dt_aux[, .(Method, r, Case, Subspace)]
+dt_table <- dt_aux[, .(Method, r, Case, Subspace, Dimension)]
 
 # Optionally reshape wide to combine cases into a single row per Method & r
-dt_wide <- dcast(dt_table, Method + r ~ Case, value.var = "Subspace")
-setorder(dt_wide,-r)
+dt_wide_subspace <- dcast(dt_table, Method + r ~ Case, value.var = "Subspace")
+dt_wide_dimension <- dcast(dt_table, Method + r ~ Case, value.var = "Dimension")
+
+setorder(dt_wide_subspace,-r)
+setorder(dt_wide_dimension,-r)
 
 # Print as LaTeX table
-print(xtable(dt_wide, align = paste0("lrl", paste(rep("r", ncol(dt_wide) - 2), collapse = ""))),
+print(xtable(dt_wide_subspace, align = paste0("lrl", paste(rep("r", ncol(dt_wide_subspace) - 2), collapse = ""))),
+      include.rownames = FALSE)
+
+print(xtable(dt_wide_dimension, align = paste0("lrl", paste(rep("r", ncol(dt_wide_dimension) - 2), collapse = ""))),
       include.rownames = FALSE)
 
 

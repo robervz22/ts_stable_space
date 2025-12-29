@@ -26,8 +26,8 @@ seeds <- c(1,1) # seeds for reproducibility
 sigma <- 1 # equal variance for the non-correlated case
 spca_sparse <- "penalty"  # type of sparsity: "penalty" or "varnum"
 spca_para <- 0.25 # sparsity parameter for SPCA
+# -------- important: new SPCA and SPLS parameters --------
 spca_engine <- "elasticnet" # type of sparsity and engine for SPCA
-spca_para <- 0.25 # sparsity parameter for SPCA
 spca_eta <- 0.125
 spls_eta    <- spca_eta   # e.g. reuse SPCA penalty; or set manually, e.g. 0.6
 spls_kappa  <- 0.25        # ridge–lasso mixing

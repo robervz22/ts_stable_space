@@ -118,13 +118,19 @@ X_simulation <- function(seed, m, r, Tt,
 run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
                            test = "kpss", dist = "normal",
                            persistence = "low", dependence = FALSE,
-                           trend = FALSE,burnin = 200, methods = c("Johansen", "PLS", "PCA", "SPCA"),                          
+                           trend = FALSE,burnin = 200, methods = c("Johansen", "PLS", "PCA", "SPLS", "SPCA"),                          
                            # --- new: spca controls with safe defaults ---
                             spca_engine = c("elasticnet", "PMA"),
                             spca_sparse = c("varnum", "penalty"), # only for elasticnet
-                            spca_k = NULL, # number of sparse components (defaults to ncol(X))
+                            spca_K = NULL, # number of sparse components (defaults to ncol(X))
                             spca_para = NULL, # sparsity control (engine-specific; see spca_alg docs below)
-                            spca_center = FALSE, spca_scale = FALSE) {
+                            spca_center = TRUE, spca_scale = TRUE,
+                            spca_eta = 0.125,
+                           # --- new: spls controls with safe defaults --- 
+                            spls_K = NULL, # number of sparse components (defaults to ncol(X))
+                            spls_eta = 0.125,
+                            spls_kappa = 0.1,
+                            spls_center = TRUE, spls_scale = TRUE) {
 
   
   results_list <- list()
@@ -175,17 +181,28 @@ run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
                                    i1 = i1, i2 = i2, Case = case_name,
                                    n_coint = NA, n_norms = NA)
 
-        for (method in intersect(c("PLS", "PCA", "SPCA"),methods)) {
+        for (method in intersect(c("PLS", "PCA", "SPCA", "SPLS"),methods)) {
           start_method <- Sys.time()
           if(method == "PLS"){
             basis <- basis_stable(X, method = "pls", test = test)
           } else if(method == "PCA"){
-            basis <- basis_stable(scale(X), method = "pca", test = test)
+            basis <- basis_stable(X, method = "pca", test = test)
           } else if(method == "SPCA"){
-            basis <- basis_stable(scale(X), method = "spca", test = test, 
-                                      spca_sparse = spca_sparse, 
-                                      spca_engine = spca_engine, 
-                                      spca_para = spca_para)
+            basis <- basis_stable(
+                                  X, method = "spca", test = test,
+                                  # spca_K      = spca_K,
+                                  spca_eta    = spca_eta)
+            # basis <- basis_stable(scale(X), method = "spca", test = test, 
+            #                           spca_sparse = spca_sparse, 
+            #                           spca_engine = spca_engine, 
+            #                           spca_para = spca_para)
+
+          } else if(method == "SPLS"){
+            basis <- basis_stable(
+                                  X, method = "spls", test = test,
+                                  # spls_K      = spls_K,
+                                  spls_eta    = spls_eta,
+                                  spls_kappa  = spls_kappa)
           }
           end_method <- Sys.time()
           elapsed_method <- difftime(end_method, start_method, units = "secs")
@@ -202,11 +219,11 @@ run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
         if (m <= 11 && "Johansen" %in% methods) {
           basis_johansen <- basis_stable(X, method = "johansen")
           if (!is.null(ncol(basis_johansen$basis_S))) {
-            iter_results[iter_results$Method == method, "n_coint"] <- ncol(basis_johansen$basis_S) - r
+            iter_results[iter_results$Method == "Johansen", "n_coint"] <- ncol(basis_johansen$basis_S) - r
           } else {
-            iter_results[iter_results$Method == method, "n_coint"] <- -r
+            iter_results[iter_results$Method == "Johansen", "n_coint"] <- -r
           }
-          iter_results[iter_results$Method == method, "n_norms"] <- grassmann_distance(beta, basis_johansen$basis_S)
+          iter_results[iter_results$Method == "Johansen", "n_norms"] <- grassmann_distance(beta, basis_johansen$basis_S)
 
         }
         results_list[[length(results_list) + 1]] <- iter_results

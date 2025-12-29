@@ -399,7 +399,7 @@ pca_alg_prcomp <- function(X, setX = NULL,
 
   # number of components (default: all)
   if (is.null(ncomp)) ncomp <- m
-  ncomp <- min(ncomp, ncol(setX))
+  # ncomp <- min(ncomp, ncol(setX))
 
   # PCA on the predictor block
   fit <- prcomp(setX,
@@ -407,6 +407,7 @@ pca_alg_prcomp <- function(X, setX = NULL,
                 scale. = scale.)
 
   # Scores (T x ncomp) and loadings (m x ncomp)
+  print(fit$x)
   PC_scores   <- fit$x[, 1:ncomp, drop = FALSE]         # observations in PC space
   PC_loadings <- fit$rotation[, 1:ncomp, drop = FALSE]  # eigenvectors
 
@@ -505,7 +506,7 @@ spls_alg <- function(
   Y_next <- Xc[2:n,         , drop = FALSE] ; Y_next <- scale(Y_next, center = center, scale = FALSE)
 
   if (is.null(K)) {
-    K <- min(20L, p, n - 1L)
+    K <- p #min(20L, p, n - 1L)
   }
 
   fit <- spls::spls(
@@ -515,8 +516,8 @@ spls_alg <- function(
     eta     = eta,
     kappa   = kappa,
     scale.x = scale,
-    scale.y = scale,
-    fit = "oscorespls"
+    scale.y = scale
+    # fit = "oscorespls"
   )
 
   ## X-side sparse loadings (p x K)
@@ -535,12 +536,88 @@ spls_alg <- function(
   )
 }
 
+# SPLS using mixOmics package
+spls_alg_mixOmics <- function(
+  X,
+  K      = NULL,   # number of components
+  etaX   = 0.6,   # sparsity for X
+  etaY   = 0.6,   # sparsity for Y (smaller -> keep more Y’s)
+  kappa  = 0.1,    # unused here, kept for interface compatibility
+  center = TRUE,
+  scale  = TRUE
+) {
+  if (!requireNamespace("mixOmics", quietly = TRUE)) {
+    stop("Package 'mixOmics' is required. Please install it (e.g. install.packages('mixOmics')).")
+  }
+
+  # initial centring/scaling of original series
+  Xc <- if (center || scale) scale(X, center = center, scale = scale) else X
+  n  <- nrow(Xc)
+  p  <- ncol(Xc)
+
+  if (n < 2L) stop("Need at least 2 observations for SPLS (lag-1 construction).")
+
+  ## lag-1: X_t -> X_{t+1}
+  X_lag  <- Xc[1:(n - 1L), , drop = FALSE]
+  Y_next <- Xc[2:n,         , drop = FALSE]
+
+  ## (optional) centre lagged matrices only, no extra scaling
+  X_lag  <- scale(X_lag,  center = center, scale = FALSE)
+  Y_next <- scale(Y_next, center = center, scale = FALSE)
+
+  if (is.null(K)) K <- min(p,nrow(X_lag))
+
+  q <- ncol(Y_next)
+
+  ## map etaX, etaY in [0,1) to how many vars to keep
+  prop_keep_X <- max(0.01, 1 - etaX)
+  prop_keep_Y <- max(0.01, 1 - etaY)
+
+  n_keepX <- max(1L, round(prop_keep_X * p))
+  n_keepY <- max(1L, round(prop_keep_Y * q))
+
+  keepX <- rep(n_keepX, K)
+  keepY <- rep(n_keepY, K)
+
+  ## sparse PLS2 regression with mixOmics
+  fit <- mixOmics::spls(
+    X      = X_lag,
+    Y      = Y_next,
+    ncomp  = K,
+    keepX  = keepX,
+    keepY  = keepY,
+    mode   = "regression",
+    # scale  = FALSE,   # we've already scaled/centred above
+    # center = FALSE
+  )
+
+  ## X-side sparse loadings (p x K) – analogous to your PLS_w
+  if (!is.null(fit$loadings$X)) {
+    PLS_w <- fit$loadings$X
+  } else {
+    stop("mixOmics::spls object does not contain 'loadings$X'.")
+  }
+
+  ## scores for X_lag – use mixOmics' variates (n-1 x K)
+  if (!is.null(fit$variates$X)) {
+    PLS_scores <- fit$variates$X
+  } else {
+    # fallback: compute scores manually
+    PLS_scores <- X_lag %*% PLS_w
+  }
+
+  list(
+    PLS_scores = as.matrix(PLS_scores),
+    PLS_w      = as.matrix(PLS_w)
+  )
+}
+
+
 # Alternative version of SPCA as a particular case of SPLS
 spca_alg_alternative <- function(
   X,
   K      = NULL,   # number of components
   eta    = 0.6,    # main sparsity penalty (0 <= eta < 1, higher -> sparser)
-  kappa  = 0.1,    # ridge–lasso mixing (0 <= kappa < 0.5)
   center = TRUE,
   scale  = TRUE
 ) {
@@ -555,7 +632,7 @@ spca_alg_alternative <- function(
   if (n < 2L) stop("Need at least 2 observations for SPLS (lag-1 construction).")
 
   if (is.null(K)) {
-    K <- min(20L, p, n - 1L)
+    K <- p #min(20L, p, n - 1L)
   }
 
   fit <- spls::spls(
@@ -563,10 +640,10 @@ spca_alg_alternative <- function(
     y       = Xc,
     K       = K,
     eta     = eta,
-    kappa   = kappa,
+    kappa   = 0.5, # special case of SPLS
     scale.x = scale,
-    scale.y = scale,
-    fit = "oscorespls"
+    scale.y = scale
+    # fit = "oscorespls"
   )
 
   ## X-side sparse loadings (p x K)
@@ -601,13 +678,13 @@ basis_stable <- function(
   # --- NEW: SPLS controls (penalty-based, spls package) ---
   spls_K      = NULL,   # number of components
   spls_eta    = 0.6,    # sparsity / L1-like penalty
-  spls_kappa  = 0.1,    # ridge–lasso mixing
+  spls_kappa  = 0.25,    # ridge–lasso mixing
   spls_center = TRUE,
   spls_scale  = TRUE
 ) {
   if (method == "pls") {
     # pls procedure
-    basis <- pls_alg_plsr(X)
+    basis <- pls_alg(X)
     T_scores <- basis$PLS_scores
     colnames(basis) <- NULL; rownames(basis) <- NULL
 
@@ -653,17 +730,17 @@ basis_stable <- function(
 
   if (method == "pca") {
     # pca method
-    basis <- pca_alg_prcomp(X)
+    basis <- pca_alg(X)
     # colnames(basis) <- NULL;
     # rownames(basis) <- NULL
-    proy_X <- basis$PC_scores
+    proy_X <- X%*%basis
 
     if (test == "kpss") {
       stationary_components <- apply(proy_X, 2, function(col) tseries::kpss.test(col)$p.value > alpha)
       index_stationary <- which(stationary_components)
       if (length(stationary_components) > 0 && length(index_stationary) > 0) {
-        basis_S <- basis$PC_loadings[, index_stationary, drop = FALSE]
-        basis_N <- basis$PC_loadings[, - index_stationary, drop = FALSE]
+        basis_S <- basis[, index_stationary, drop = FALSE]
+        basis_N <- basis[, - index_stationary, drop = FALSE]
         return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N)))
       } else {
         return(list(basis_S = NULL, basis_N = basis))
@@ -687,31 +764,31 @@ basis_stable <- function(
     engine <- match.arg(spca_engine)
     sparse <- match.arg(spca_sparse)
     ## NEW: SPCA via spls::spls (elastic-net-like)
-    basis <- spca_alg_alternative(
-      X,
-      K      = spca_K,
-      eta    = spca_eta,
-      kappa  = 0.5,
-      center = spca_center,
-      scale  = spca_scale
-    )
-    T_scores <- basis$PCA_scores
-
-    # basis <- spca_alg(
-    #   X, k = spca_k, para = spca_para, center = spca_center, scale = spca_scale,
-    #   engine = engine, sparse = sparse
+    # basis <- spca_alg_alternative(
+    #   X,
+    #   K      = spca_K,
+    #   eta    = spca_eta,
+    #   center = spca_center,
+    #   scale  = spca_scale
     # )
-    # colnames(basis) <- NULL ; rownames(basis) <- NULL
-    # Xc <- if (spca_center || spca_scale) scale(X, center = spca_center, scale = spca_scale) else X
+    # T_scores <- basis$PCA_scores
+
+    basis <- spca_alg(
+      X, k = spca_K, para = spca_para, center = spca_center, scale = spca_scale,
+      engine = engine, sparse = sparse
+    )
+    colnames(basis) <- NULL ; rownames(basis) <- NULL
+    Xc <- if (spca_center || spca_scale) scale(X, center = spca_center, scale = spca_scale) else X
     # proy_X <- Xc %*% basis
+    T_scores <- Xc %*% basis
 
     if (test == "kpss") {
       stationary_components <- apply(T_scores,2,function(col) tseries::kpss.test(col)$p.value > alpha)
       idx <- which(stationary_components)
       if (length(stationary_components) > 0 && length(idx) > 0) {
         return(list(
-          basis_S = as.matrix(basis$PCA_w[, idx, drop = FALSE]),
-          basis_N = as.matrix(basis$PCA_w[, -idx, drop = FALSE])
+          basis_S = as.matrix(basis[, idx, drop = FALSE]),
+          basis_N = as.matrix(basis[, -idx, drop = FALSE])
         ))
       } else {
         return(list(basis_S = NULL, basis_N = basis))
@@ -733,10 +810,11 @@ basis_stable <- function(
 
   if (method == "spls") {
     ## NEW: SPLS via spls::spls (elastic-net-like)
-    basis <- spls_alg(
+    basis <- spls_alg_mixOmics(
       X,
       K      = spls_K,
-      eta    = spls_eta,
+      etaX    = spls_eta,
+      etaY    = spls_eta,  # same sparsity for Y
       kappa  = spls_kappa,       # spca particular case of spls with kappa = 0.5
       center = spls_center,
       scale  = spls_scale
@@ -934,39 +1012,39 @@ basis_stable <- function(
 # }
 
 
-# # scores rebuilt
-# scores_rebuilt <- function(scores, Y = NULL, method = "reg") {
-#   if (is.null(scores)) {
-#     return(NULL)
-#   }
-#   if (is.null(Y)) {
-#     if (method == "PLS") {
-#       c_vec <- scale(t(X) %*% scores, center = FALSE, scale = apply(scores, 2, function(x) sum(x ^ 2)))
-#       X_est <- scores %*% t(c_vec)
-#     }
-#     else {
-#       # OLS coefficient
-#       beta <- MASS::ginv(t(scores) %*% scores) %*% t(scores) %*% X
-#       X_est <- scores %*% beta
-#     }
-#     # estimacion -prediccion
-#     colnames(X_est) <- colnames(X);
-#     rownames(X_est) <- NULL
-#     return(list(est = X_est))
-#   }
-#   else {
-#     if (method == "PLS") {
-#       c_vec <- scale(t(Y) %*% scores, center = FALSE, scale = apply(scores, 2, function(x) sum(x ^ 2)))
-#       Y_est <- scores %*% t(c_vec)
-#     }
-#     else {
-#       # OLS coefficient
-#       beta <- MASS::ginv(t(scores) %*% scores) %*% t(scores) %*% Y
-#       Y_est <- scores %*% beta
-#     }
-#     # estimation
-#     colnames(Y_est) <- colnames(Y);
-#     rownames(Y_est) <- NULL
-#     return(list(est = Y_est))
-#   }
-# }
+# scores rebuilt
+scores_rebuilt <- function(scores, Y = NULL, method = "reg") {
+  if (is.null(scores)) {
+    return(NULL)
+  }
+  if (is.null(Y)) {
+    if (method == "PLS") {
+      c_vec <- scale(t(X) %*% scores, center = FALSE, scale = apply(scores, 2, function(x) sum(x ^ 2)))
+      X_est <- scores %*% t(c_vec)
+    }
+    else {
+      # OLS coefficient
+      beta <- MASS::ginv(t(scores) %*% scores) %*% t(scores) %*% X
+      X_est <- scores %*% beta
+    }
+    # estimacion -prediccion
+    colnames(X_est) <- colnames(X);
+    rownames(X_est) <- NULL
+    return(list(est = X_est))
+  }
+  else {
+    if (method == "PLS") {
+      c_vec <- scale(t(Y) %*% scores, center = FALSE, scale = apply(scores, 2, function(x) sum(x ^ 2)))
+      Y_est <- scores %*% t(c_vec)
+    }
+    else {
+      # OLS coefficient
+      beta <- MASS::ginv(t(scores) %*% scores) %*% t(scores) %*% Y
+      Y_est <- scores %*% beta
+    }
+    # estimation
+    colnames(Y_est) <- colnames(Y);
+    rownames(Y_est) <- NULL
+    return(list(est = Y_est))
+  }
+}
