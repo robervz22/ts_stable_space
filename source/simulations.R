@@ -2,6 +2,20 @@
 # simulations #
 ###############
 
+# Load parallel packages
+if (!requireNamespace("foreach", quietly = TRUE)) {
+  install.packages("foreach")
+}
+if (!requireNamespace("doParallel", quietly = TRUE)) {
+  install.packages("doParallel")
+}
+if (!requireNamespace("parallel", quietly = TRUE)) {
+  install.packages("parallel")
+}
+
+# Actually load the packages
+pacman::p_load(foreach,doParallel,parallel)
+
 # Grassmann distance for subspaces (allows different dimensions and NULL)
 grassmann_distance <- function(S1, S2) {
   
@@ -118,7 +132,7 @@ X_simulation <- function(seed, m, r, Tt,
 run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
                            test = "kpss", dist = "normal",
                            persistence = "low", dependence = FALSE,
-                           trend = FALSE,burnin = 200, methods = c("Johansen", "PLS", "PCA", "SPLS", "SPCA"),                          
+                           trend = FALSE, burnin = 200, methods = c("Johansen", "PLS", "PCA", "SPLS", "SPCA"),                          
                            # --- new: spca controls with safe defaults ---
                             spca_engine = c("elasticnet", "PMA"),
                             spca_sparse = c("varnum", "penalty"), # only for elasticnet
@@ -129,13 +143,20 @@ run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
                            # --- new: spls controls with safe defaults --- 
                             spls_K = NULL, # number of sparse components (defaults to ncol(X))
                             spls_eta = 0.125,
-                            spls_kappa = 0.1,
-                            spls_center = TRUE, spls_scale = TRUE) {
+                            spls_center = TRUE, spls_scale = TRUE,
+                            parallel = TRUE, n_cores = NULL) {
 
-  
-  results_list <- list()
+  # Setup parallel backend if requested
+  if (parallel) {
+    if (is.null(n_cores)) {
+      n_cores <- max(1, parallel::detectCores() - 1)
+    }
+    cl <- parallel::makeCluster(n_cores)
+    doParallel::registerDoParallel(cl)
+    on.exit(parallel::stopCluster(cl), add = TRUE)
+  }
+
   i1_i2_names <- rownames(i_values)
-
 
   set.seed(seeds[1])  # ensure reproducibility
   Sigma_eps <- if (dependence) {
@@ -144,95 +165,171 @@ run_simulation <- function(seeds, m, r_values, i_values, Tt, S,
     diag(1, m)
   }
 
-  for (r in r_values) {
-    set.seed(seeds[2] + r)  # reproducible beta/beta_orto
-    I_m <- qr.Q(qr(matrix(rnorm(m^2), m, m)))
-    beta <- as.matrix(I_m[, 1:r])
-    beta_orto <- if (r < m) as.matrix(I_m[, (r + 1):m]) else matrix(0, m, m)
-
-    alpha <- switch(persistence,
-                    "low" = runif(r, 0.1, 0.3),
-                    "high" = runif(r, 0.3, 0.7))
-    gamma <- runif(ncol(beta_orto), -0.7, 0.7)
-
-
-    for (idx in 1:nrow(i_values)) {
-      pair <- i_values[idx, ]
+  # Create parameter grid for parallel iteration
+  param_grid <- expand.grid(r_idx = seq_along(r_values), 
+                             case_idx = 1:nrow(i_values), 
+                             s = 1:S)
+  
+  # Parallel loop over all combinations
+  results_list <- if (parallel) {
+    foreach::foreach(
+      row = 1:nrow(param_grid),
+      .combine = 'rbind',
+      .packages = c('data.table'),
+      .export = c('basis_stable', 'grassmann_distance', 'X_simulation', 'ca.jo',
+                  'pls_alg_plsr', 'pca_alg_prcomp',
+                  'spca_alg', 'spls_alg_mixOmics'),
+      .errorhandling = 'pass'
+    ) %dopar% {
+      
+      params <- param_grid[row, ]
+      r_idx <- params$r_idx
+      case_idx <- params$case_idx
+      s <- params$s
+      
+      r <- r_values[r_idx]
+      
+      # Set seed for this specific r value for reproducibility
+      set.seed(seeds[2] + r)
+      I_m <- qr.Q(qr(matrix(rnorm(m^2), m, m)))
+      beta <- as.matrix(I_m[, 1:r])
+      beta_orto <- if (r < m) as.matrix(I_m[, (r + 1):m]) else matrix(0, m, m)
+      
+      alpha <- switch(persistence,
+                      "low" = runif(r, 0.1, 0.3),
+                      "high" = runif(r, 0.3, 0.7))
+      gamma <- runif(ncol(beta_orto), -0.7, 0.7)
+      
+      pair <- i_values[case_idx, ]
       i1 <- pair[1]; i2 <- pair[2]
-      case_name <- i1_i2_names[idx]
-
-      for (s in 1:S) {
-        # Simulate with precomputed components
-        start_simulation <- Sys.time()
-        sim_fun <- X_simulation(
-          seed = s, m = m, r = r, Tt = Tt + burnin,
-          alpha = alpha, beta = beta, beta_orto = beta_orto, gamma = gamma,
-          Sigma_eps = Sigma_eps, dist = dist, trend = trend, mix = TRUE
-        )
-        sim_data <- sim_fun(i1, i2)
-
-        X <- sim_data$X[(burnin+1):nrow(sim_data$X), ]  # remove burn-in
-        end_simulation <- Sys.time()
-        elapsed_simulation <- difftime(end_simulation, start_simulation, units = "secs")
-
-        # cat("\nSimulation time: ", round(elapsed_simulation), "(s)")
-
-        iter_results <- data.frame(Method = methods, m = m, r = r,
-                                   i1 = i1, i2 = i2, Case = case_name,
-                                   n_coint = NA, n_norms = NA)
-
-        for (method in intersect(c("PLS", "PCA", "SPCA", "SPLS"),methods)) {
-          start_method <- Sys.time()
-          if(method == "PLS"){
-            basis <- basis_stable(X, method = "pls", test = test)
-          } else if(method == "PCA"){
-            basis <- basis_stable(X, method = "pca", test = test)
-          } else if(method == "SPCA"){
-            basis <- basis_stable(
-                                  X, method = "spca", test = test,
-                                  # spca_K      = spca_K,
-                                  spca_eta    = spca_eta)
-            # basis <- basis_stable(scale(X), method = "spca", test = test, 
-            #                           spca_sparse = spca_sparse, 
-            #                           spca_engine = spca_engine, 
-            #                           spca_para = spca_para)
-
-          } else if(method == "SPLS"){
-            basis <- basis_stable(
-                                  X, method = "spls", test = test,
-                                  # spls_K      = spls_K,
-                                  spls_eta    = spls_eta,
-                                  spls_kappa  = spls_kappa)
-          }
-          end_method <- Sys.time()
-          elapsed_method <- difftime(end_method, start_method, units = "secs")
-          # cat("\n",method, " time: ",round(elapsed_method,2),"(s)")
-
-          if (!is.null(ncol(basis$basis_S))) {
-            iter_results[iter_results$Method == method, "n_coint"] <- ncol(basis$basis_S) - r
-          } else {
-            iter_results[iter_results$Method == method, "n_coint"] <- -r
-          }
-          iter_results[iter_results$Method == method, "n_norms"] <- grassmann_distance(beta, basis$basis_S)
+      case_name <- i1_i2_names[case_idx]
+      
+      # Simulate with precomputed components
+      sim_fun <- X_simulation(
+        seed = s, m = m, r = r, Tt = Tt + burnin,
+        alpha = alpha, beta = beta, beta_orto = beta_orto, gamma = gamma,
+        Sigma_eps = Sigma_eps, dist = dist, trend = trend, mix = TRUE
+      )
+      sim_data <- sim_fun(i1, i2)
+      
+      X <- sim_data$X[(burnin+1):nrow(sim_data$X), ]  # remove burn-in
+      
+      iter_results <- data.frame(Method = methods, m = m, r = r,
+                                 i1 = i1, i2 = i2, Case = case_name,
+                                 n_coint = NA, n_norms = NA)
+      
+      for (method in intersect(c("PLS", "PCA", "SPCA", "SPLS"), methods)) {
+        if(method == "PLS"){
+          basis <- basis_stable(X, method = "pls", test = test)
+        } else if(method == "PCA"){
+          basis <- basis_stable(scale(X), method = "pca", test = test)
+        } else if(method == "SPCA"){
+          basis <- basis_stable(
+                                X, method = "spca", test = test,
+                                spca_eta    = spca_eta)
+        } else if(method == "SPLS"){
+          basis <- basis_stable(
+                                X, method = "spls", test = test,
+                                spls_eta    = spls_eta)
         }
-
-        if (m <= 11 && "Johansen" %in% methods) {
-          basis_johansen <- basis_stable(X, method = "johansen")
-          if (!is.null(ncol(basis_johansen$basis_S))) {
-            iter_results[iter_results$Method == "Johansen", "n_coint"] <- ncol(basis_johansen$basis_S) - r
-          } else {
-            iter_results[iter_results$Method == "Johansen", "n_coint"] <- -r
-          }
-          iter_results[iter_results$Method == "Johansen", "n_norms"] <- grassmann_distance(beta, basis_johansen$basis_S)
-
+        
+        if (!is.null(ncol(basis$basis_S))) {
+          iter_results[iter_results$Method == method, "n_coint"] <- ncol(basis$basis_S) - r
+        } else {
+          iter_results[iter_results$Method == method, "n_coint"] <- -r
         }
-        results_list[[length(results_list) + 1]] <- iter_results
+        iter_results[iter_results$Method == method, "n_norms"] <- grassmann_distance(beta, basis$basis_S)
+      }
+      
+      if (m <= 11 && "Johansen" %in% methods) {
+        basis_johansen <- basis_stable(scale(X), method = "johansen")
+        if (!is.null(ncol(basis_johansen$basis_S))) {
+          iter_results[iter_results$Method == "Johansen", "n_coint"] <- ncol(basis_johansen$basis_S) - r
+        } else {
+          iter_results[iter_results$Method == "Johansen", "n_coint"] <- -r
+        }
+        iter_results[iter_results$Method == "Johansen", "n_norms"] <- grassmann_distance(beta, basis_johansen$basis_S)
+      }
+      iter_results
+    }
+  } else {
+    # Serial version (fallback)
+    list_result <- list()
+    for (r_idx in seq_along(r_values)) {
+      r <- r_values[r_idx]
+      set.seed(seeds[2] + r)
+      I_m <- qr.Q(qr(matrix(rnorm(m^2), m, m)))
+      beta <- as.matrix(I_m[, 1:r])
+      beta_orto <- if (r < m) as.matrix(I_m[, (r + 1):m]) else matrix(0, m, m)
+      
+      alpha <- switch(persistence,
+                      "low" = runif(r, 0.1, 0.3),
+                      "high" = runif(r, 0.3, 0.7))
+      gamma <- runif(ncol(beta_orto), -0.7, 0.7)
+      
+      for (case_idx in 1:nrow(i_values)) {
+        pair <- i_values[case_idx, ]
+        i1 <- pair[1]; i2 <- pair[2]
+        case_name <- i1_i2_names[case_idx]
+        
+        for (s in 1:S) {
+          sim_fun <- X_simulation(
+            seed = s, m = m, r = r, Tt = Tt + burnin,
+            alpha = alpha, beta = beta, beta_orto = beta_orto, gamma = gamma,
+            Sigma_eps = Sigma_eps, dist = dist, trend = trend, mix = TRUE
+          )
+          sim_data <- sim_fun(i1, i2)
+          
+          X <- sim_data$X[(burnin+1):nrow(sim_data$X), ]
+          
+          iter_results <- data.frame(Method = methods, m = m, r = r,
+                                     i1 = i1, i2 = i2, Case = case_name,
+                                     n_coint = NA, n_norms = NA)
+          
+          for (method in intersect(c("PLS", "PCA", "SPCA", "SPLS"), methods)) {
+            if(method == "PLS"){
+              basis <- basis_stable(X, method = "pls", test = test)
+            } else if(method == "PCA"){
+              basis <- basis_stable(scale(X), method = "pca", test = test)
+            } else if(method == "SPCA"){
+              basis <- basis_stable(X, method = "spca", test = test, spca_eta = spca_eta)
+            } else if(method == "SPLS"){
+              basis <- basis_stable(X, method = "spls", test = test, spls_eta = spls_eta)
+            }
+            
+            if (!is.null(ncol(basis$basis_S))) {
+              iter_results[iter_results$Method == method, "n_coint"] <- ncol(basis$basis_S) - r
+            } else {
+              iter_results[iter_results$Method == method, "n_coint"] <- -r
+            }
+            iter_results[iter_results$Method == method, "n_norms"] <- grassmann_distance(beta, basis$basis_S)
+          }
+          
+          if (m <= 11 && "Johansen" %in% methods) {
+            basis_johansen <- basis_stable(scale(X), method = "johansen")
+            if (!is.null(ncol(basis_johansen$basis_S))) {
+              iter_results[iter_results$Method == "Johansen", "n_coint"] <- ncol(basis_johansen$basis_S) - r
+            } else {
+              iter_results[iter_results$Method == "Johansen", "n_coint"] <- -r
+            }
+            iter_results[iter_results$Method == "Johansen", "n_norms"] <- grassmann_distance(beta, basis_johansen$basis_S)
+          }
+          
+          list_result[[length(list_result) + 1]] <- iter_results
+        }
       }
     }
+    list_result
   }
 
-  # Aggregate simulation results
-  results_df <- do.call(rbind, results_list)
+  # Flatten list and convert to dataframe
+  if (parallel) {
+    # results_list from foreach with .combine = 'rbind' is a matrix, convert to data frame
+    results_df <- as.data.frame(results_list)
+  } else {
+    # results_list from serial is a list of data frames
+    results_df <- do.call(rbind, results_list)
+  }
 
   summary_table <- results_df %>%
     dplyr::group_by(Method, m, r, i1, i2, Case) %>%

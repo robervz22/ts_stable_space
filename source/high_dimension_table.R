@@ -21,7 +21,7 @@ persistence <- "low" ; dist <- "t" # persistence and innovation process distribu
 dependence <- TRUE
 seeds <- c(1,1) # seeds for reproducibility
 spca_sparse <- "penalty"  # type of sparsity: "penalty" or "varnum"
-spca_para <- 0.1 # sparsity parameter for SPCA
+spca_para <- 0.125 # sparsity parameter for SPCA
 spca_engine <- "elasticnet" # type of sparsity and engine for SPCA
 spca_eta <- 0.125
 spls_eta    <- spca_eta  # e.g. reuse SPCA penalty; or set manually, e.g. 0.6

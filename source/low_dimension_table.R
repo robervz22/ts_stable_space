@@ -16,24 +16,24 @@ r_values <- c(10,9,8)
 i_values <- matrix(c(11,0,10,0,9,1,8,2),nrow=4,ncol=2,byrow = TRUE)
 rownames(i_values) <- c('Case 1','Case 2','Case 3','Case 4')
 Tt <- 100 # series length
-S <- 500 # number of simulation
+S <- 300 # number of simulation
 persistence <- "low" ; dist <- "t" # persistence and innovation process distribution
 dependence <- TRUE
 seeds <- c(1,1) # seeds for reproducibility
-spca_sparse <- "penalty"  # type of sparsity: "penalty" or "varnum"
-spca_para <- 0.125 # sparsity parameter for SPCA
+spca_sparse <- "varnum"  # type of sparsity: "penalty" or "varnum"
 spca_engine <- "elasticnet" # type of sparsity and engine for SPCA
-spca_eta <- 0.125
-spls_eta    <- spca_eta  # e.g. reuse SPCA penalty; or set manually, e.g. 0.6
-spls_kappa  <- 0.25      # ridge–lasso mixing
+spca_eta <- 0.6
+spls_eta <- spca_eta  # e.g. reuse SPCA penalty; or set manually, e.g. 0.6
 
 ###############################################
 # Produce table for low-dimensional scenarios #
 ###############################################
-df_low_dimension <- run_simulation(seeds,m,r_values,i_values,Tt,S,
+df_low_dimension <- run_simulation(seeds, m, r_values, i_values, Tt, S,
                     dist = dist, persistence = persistence, dependence = dependence,
-                    spca_sparse = spca_sparse, spca_para = spca_para, spca_engine = spca_engine,
-                    spca_eta = spca_eta, spls_eta = spls_eta, spls_kappa = spls_kappa)
+                    spca_sparse = spca_sparse, spca_engine = spca_engine,
+                    spca_eta = spca_eta, spls_eta = spls_eta,
+                    parallel = TRUE,  # Enable parallelization
+                    n_cores = NULL)   # Use all available cores (minus 1)
 
                 
 dt_low_dimension <- as.data.table(df_low_dimension)
@@ -72,7 +72,3 @@ print(xtable(dt_wide_subspace, align = paste0("lrl", paste(rep("r", ncol(dt_wide
 
 print(xtable(dt_wide_dimension, align = paste0("lrl", paste(rep("r", ncol(dt_wide_dimension) - 2), collapse = ""))),
       include.rownames = FALSE)
-
-
-
-

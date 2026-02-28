@@ -252,66 +252,68 @@ ca.jo <- function(x, type = c("eigen", "trace"), ecdet = c("none", "const", "tre
 }
 
 # PLS for vectorial time series
-pls_alg <- function(X, setX = NULL, setY = NULL) {
-  # consider the reverse order
-  X_rev <- t(matrix(apply(t(X), 1, rev), ncol = ncol(t(X)), byrow = TRUE))
-  # pls
-  if (is.null(setX) | is.null(setY)) {
-    N <- nrow(X);
-    m <- ncol(X)
-    PLS_vecs <- c();
-    PLS_scores <- c();
-    PLS_w <- c()
-    aux <- diag(m)
-    setY <- scale(X_rev[1:(N - 1),])
-    # setY <- X_rev[1:(N-1),]
-    setX <- scale(X_rev[2:N,])
-    # setX <- X_rev[2:N,]
-    tY <- t(setY)
-    tX <- t(setX)
-  }
-  else {
-    setX <- scale(setX);
-    setY <- scale(setY)
-    tX <- t(setX)
-    tY <- t(setY)
-    N <- nrow(setX);
-    m <- ncol(setX)
-    PLS_vecs <- c();
-    PLS_scores <- c();
-    PLS_w <- c()
-    aux <- diag(m)
-  }
-  for (i in 1:m) {
-    # STEP 1
-    aux_Psi <- (tX %*% t(tY))
-    result <- eigen(aux_Psi %*% t(aux_Psi))
-    w <- as.matrix(result$vectors[, 1])
-    t <- t(tX) %*% w
+# pls_alg <- function(X, setX = NULL, setY = NULL, max_components = 100) {
+#   # consider the reverse order
+#   X_rev <- t(matrix(apply(t(X), 1, rev), ncol = ncol(t(X)), byrow = TRUE))
+#   # pls
+#   if (is.null(setX) | is.null(setY)) {
+#     N <- nrow(X);
+#     m <- ncol(X)
+#     PLS_vecs <- c();
+#     PLS_scores <- c();
+#     PLS_w <- c()
+#     aux <- diag(m)
+#     setY <- scale(X_rev[1:(N - 1),])
+#     # setY <- X_rev[1:(N-1),]
+#     setX <- scale(X_rev[2:N,])
+#     # setX <- X_rev[2:N,]
+#     tY <- t(setY)
+#     tX <- t(setX)
+#   }
+#   else {
+#     setX <- scale(setX);
+#     setY <- scale(setY)
+#     tX <- t(setX)
+#     tY <- t(setY)
+#     N <- nrow(setX);
+#     m <- ncol(setX)
+#     PLS_vecs <- c();
+#     PLS_scores <- c();
+#     PLS_w <- c()
+#     aux <- diag(m)
+#   }
+#   # Apply maximum components limit
+#   m <- min(m, max_components)
+#   for (i in 1:m) {
+#     # STEP 1
+#     aux_Psi <- (tX %*% t(tY))
+#     result <- eigen(aux_Psi %*% t(aux_Psi))
+#     w <- as.matrix(result$vectors[, 1])
+#     t <- t(tX) %*% w
 
-    # STEP 2
-    # updated weights
-    mat_w <- w %*% t(w)
-    mat_var <- tX %*% t(tX)
-    w_new <- aux %*% w
-    P <- diag(m) - (mat_w %*% mat_var) / (sum(t ^ 2))
-    aux <- aux %*% P
+#     # STEP 2
+#     # updated weights
+#     mat_w <- w %*% t(w)
+#     mat_var <- tX %*% t(tX)
+#     w_new <- aux %*% w
+#     P <- diag(m) - (mat_w %*% mat_var) / (sum(t ^ 2))
+#     aux <- aux %*% P
 
-    # STEP 3
-    # residual information
-    tX <- t(P) %*% tX
-    PLS_vecs <- cbind(PLS_vecs, w_new);
-    PLS_scores <- cbind(PLS_scores, t)
-    PLS_w <- cbind(PLS_w, w)
-  }
-  colnames(PLS_vecs) <- NULL
-  colnames(PLS_scores) <- NULL
-  return(list(PLS_vecs = PLS_vecs, PLS_scores = PLS_scores, PLS_w = PLS_w))
-}
+#     # STEP 3
+#     # residual information
+#     tX <- t(P) %*% tX
+#     PLS_vecs <- cbind(PLS_vecs, w_new);
+#     PLS_scores <- cbind(PLS_scores, t)
+#     PLS_w <- cbind(PLS_w, w)
+#   }
+#   colnames(PLS_vecs) <- NULL
+#   colnames(PLS_scores) <- NULL
+#   return(list(PLS_vecs = PLS_vecs, PLS_scores = PLS_scores, PLS_w = PLS_w))
+# }
 
 # PLS for vectorial time series using pls::plsr
 pls_alg_plsr <- function(X, setX = NULL, setY = NULL,
-                         ncomp = NULL,
+                         ncomp = NULL, max_components = 100,
                          center = TRUE, scale = TRUE,
                          method = "oscorespls") {
   if (!requireNamespace("pls", quietly = TRUE)) {
@@ -320,14 +322,15 @@ pls_alg_plsr <- function(X, setX = NULL, setY = NULL,
 
   ## Construct (X_t, X_{t-1}) pairs in the same way as your original pls_alg
   if (is.null(setX) || is.null(setY)) {
-    N <- nrow(X)
-    m <- ncol(X)
 
     # reverse time order like in your original code
     X_rev <- t(matrix(apply(t(X), 1, rev), ncol = ncol(t(X)), byrow = TRUE))
 
-    setY <- X_rev[1:(N - 1), , drop = FALSE]  # "past"
-    setX <- X_rev[2:N,       , drop = FALSE]  # "future"
+    setY <- X_rev[1:(nrow(X_rev) - 1), , drop = FALSE]  # "past"
+    setX <- X_rev[2:nrow(X_rev),       , drop = FALSE]  # "future"
+    N <- nrow(setX)  # now N-1
+    m <- ncol(setX)
+
   } else {
     setX <- as.matrix(setX)
     setY <- as.matrix(setY)
@@ -335,7 +338,20 @@ pls_alg_plsr <- function(X, setX = NULL, setY = NULL,
     m <- ncol(setX)
   }
 
-  if (is.null(ncomp)) ncomp <- m
+  # Calculate appropriate ncomp
+  # PLS requirements: ncomp <= min(N, ncol(X), ncol(Y))
+  # Be conservative: limit to at most 2/3 of observations to avoid overfitting
+  max_allowed <- min(N, ncol(setX), ncol(setY))
+  conservative_limit <- max(1, floor(2 * N / 3))
+  
+  if (is.null(ncomp)) {
+    ncomp <- min(conservative_limit, max_allowed, max_components)
+  } else {
+    ncomp <- min(ncomp, conservative_limit, max_allowed, max_components)
+  }
+  
+  # Ensure ncomp is at least 1
+  ncomp <- max(1, ncomp)
 
   ## Fit PLS via pls::plsr, x/y interface
   fit <- pls::plsr(
@@ -364,19 +380,22 @@ pls_alg_plsr <- function(X, setX = NULL, setY = NULL,
   )
 }
 
-# PCA for vectorial time series
-pca_alg <- function(X) {
-  X_rev <- matrix(apply(t(X), 1, rev), ncol = ncol(t(X)), byrow = TRUE)
-  A <- X_rev %*% t(X_rev)
-  result <- eigen(A)
-  PCA_vecs <- result$vectors
-  return(PCA_vecs)
-}
+# pca_alg <- function(X, max_components = 100) {
+#   X_rev <- matrix(apply(t(X), 1, rev), ncol = ncol(t(X)), byrow = TRUE)
+#   A <- X_rev %*% t(X_rev)
+#   result <- eigen(A)
+#   PCA_vecs <- result$vectors
+#   # Apply maximum components limit
+#   n_cols <- ncol(PCA_vecs)
+#   max_components <- min(n_cols, max_components)
+#   PCA_vecs <- PCA_vecs[, 1:max_components, drop = FALSE]
+#   return(PCA_vecs)
+# }
 
 # PCA for vectorial time series using stats::prcomp
 # Designed to be comparable to pls_alg_plsr()
 pca_alg_prcomp <- function(X, setX = NULL,
-                           ncomp  = NULL,
+                           ncomp = NULL, max_components = 100,
                            center = TRUE,
                            scale. = TRUE) {
   # X: T x m multivariate time series
@@ -392,22 +411,31 @@ pca_alg_prcomp <- function(X, setX = NULL,
 
     # predictors (current values) – analogous to x in plsr
     setX <- X_rev[2:N, , drop = FALSE]
+    N_actual <- nrow(setX)
   } else {
     setX <- as.matrix(setX)
+    N_actual <- nrow(setX)
     m <- ncol(setX)
   }
 
-  # number of components (default: all)
-  if (is.null(ncomp)) ncomp <- m
-  # ncomp <- min(ncomp, ncol(setX))
+  # number of components (default: conservative limit based on data size)
+  # Use at most 2/3 of observations to avoid overfitting
+  max_allowed <- min(N_actual, m)
+  conservative_limit <- max(1, floor(2 * N_actual / 3))
+  
+  if (is.null(ncomp)) {
+    ncomp <- min(conservative_limit, max_allowed, max_components)
+  } else {
+    ncomp <- min(ncomp, conservative_limit, max_allowed, max_components)
+  }
+  
+  # Ensure ncomp is at least 1
+  ncomp <- max(1, ncomp)
 
   # PCA on the predictor block
-  fit <- prcomp(setX,
-                center = center,
-                scale. = scale.)
+  fit <- prcomp(setX, center = center, scale. = scale.)
 
   # Scores (T x ncomp) and loadings (m x ncomp)
-  print(fit$x)
   PC_scores   <- fit$x[, 1:ncomp, drop = FALSE]         # observations in PC space
   PC_loadings <- fit$rotation[, 1:ncomp, drop = FALSE]  # eigenvectors
 
@@ -418,131 +446,190 @@ pca_alg_prcomp <- function(X, setX = NULL,
 }
 
 
-# SPCA for vectorial time series
+# SPCA for vectorial time series (with "proportion kept" control)
 spca_alg <- function(
   X, k = NULL, para = NULL, center = TRUE, scale = TRUE,
   engine = c("elasticnet","PMA"),
-  sparse = c("varnum","penalty")   # NEW: only used for elasticnet
+  sparse = c("varnum","penalty"),   # still available
+  prop = NULL,                     # NEW: proportion of variables to keep (0,1]
+  tol = 1e-8,                      # NEW: threshold to count nonzeros
+  max_iter = 25                    # NEW: for PMA calibration
 ) {
   engine <- match.arg(engine)
   Xc <- if (center || scale) scale(X, center = center, scale = scale) else X
   m <- ncol(Xc)
   if (is.null(k)) k <- m
 
+  # ---- helper: column normalisation ----
+  normalise_cols <- function(L) {
+    L <- apply(L, 2, function(v) if (sum(v^2) > 0) v / sqrt(sum(v^2)) else v)
+    matrix(L, nrow = nrow(L))
+  }
+
+  # ---- helper: convert prop -> varnum ----
+  prop_to_varnum <- function(prop, m) {
+    prop <- max(min(prop, 1), 0)
+    if (prop <= 0) return(1L)
+    as.integer(max(1, min(m, ceiling(prop * m))))
+  }
+
   if (engine == "elasticnet") {
     sparse <- match.arg(sparse)
     if (!requireNamespace("elasticnet", quietly = TRUE)) {
       stop("Package 'elasticnet' is required for spca engine = 'elasticnet'. Please install it.")
     }
-    # Build Gram like your PCA helper to keep parity with shapes
+
+    # Build Gram like your PCA helper
     X_rev <- matrix(apply(t(Xc), 1, rev), ncol = ncol(t(Xc)), byrow = TRUE)
     G <- X_rev %*% t(X_rev)  # m x m
 
-    if (is.null(para)) {
-      if (sparse == "varnum") {
-        # heuristic: ~sqrt(m) non-zeros per component
-        para <- rep(ceiling(sqrt(m)), k)
-      } else { # penalty
-        # mild–moderate L1 penalties; larger => sparser
-        # start with 2–3 and tune via CV or a small grid
-        para <- rep(2.5, k)
+    # If user supplies prop, prefer it and translate to varnum
+    if (!is.null(prop)) {
+      sparse <- "varnum"
+      para <- rep(prop_to_varnum(prop, m), k)
+    } else {
+      if (is.null(para)) {
+        if (sparse == "varnum") {
+          para <- rep(ceiling(sqrt(m)), k)
+        } else { # penalty
+          para <- rep(2.5, k)
+        }
       }
-    }
-    # ensure para length k
-    if (length(para) == 1) para <- rep(para, k)
-    # fit
-    if (k > nrow(X)){
-      fit <- elasticnet::arrayspc(G, K = k, para = para)
-    }
-    else{
-      fit <- elasticnet::spca(G, K = k, type = "Gram",
-                              sparse = sparse, para = para)
+      if (length(para) == 1) para <- rep(para, k)
     }
 
-    L <- fit$loadings  # m x k
-    # normalise columns
-    L <- apply(L, 2, function(v) if (sum(v^2) > 0) v / sqrt(sum(v^2)) else v)
-    L <- matrix(L, nrow = m, ncol = ncol(fit$loadings))
-    return(L)
+    fit <- if (k > nrow(X)) {
+      elasticnet::arrayspc(G, K = k, para = para)
+    } else {
+      elasticnet::spca(G, K = k, type = "Gram", sparse = sparse, para = para)
+    }
+
+    L <- fit$loadings
+    return(normalise_cols(matrix(L, nrow = m, ncol = ncol(L))))
   }
 
   if (engine == "PMA") {
     if (!requireNamespace("PMA", quietly = TRUE)) {
       stop("Package 'PMA' is required for spca engine = 'PMA'. Please install it.")
     }
-    if (is.null(para) || is.null(para$sumabs)) {
-      para <- modifyList(list(sumabs = min(3.5, max(1.5, sqrt(m)/2))),
-                         if (is.list(para)) para else list())
+
+    # If no prop, behave like your current default
+    if (is.null(prop)) {
+      if (is.null(para) || is.null(para$sumabs)) {
+        para <- modifyList(list(sumabs = min(3.5, max(1.5, sqrt(m)/2))),
+                           if (is.list(para)) para else list())
+      }
+      fit <- PMA::SPC(x = Xc, K = k, sumabs = para$sumabs, center = FALSE, scale = FALSE)
+      L <- fit$v
+      return(normalise_cols(matrix(L, nrow = m, ncol = ncol(L))))
     }
-    fit <- PMA::SPC(x = Xc, K = k, sumabs = para$sumabs, center = FALSE, scale = FALSE)
-    L <- fit$v
-    L <- apply(L, 2, function(v) if (sum(v^2) > 0) v / sqrt(sum(v^2)) else v)
-    L <- matrix(L, nrow = ncol(Xc), ncol = ncol(fit$v))
-    return(L)
+
+    # ---- PMA calibration: choose sumabs to hit target proportion nonzeros ----
+    target_nnz <- prop_to_varnum(prop, m)
+
+    nnz_of_sumabs <- function(s) {
+      fit <- PMA::SPC(x = Xc, K = k, sumabs = s, center = FALSE, scale = FALSE)
+      # count nonzeros per component using tol, then take average across components
+      nnz <- colSums(abs(fit$v) > tol)
+      list(fit = fit, nnz = nnz, mean_nnz = mean(nnz))
+    }
+
+    # Bracket a reasonable range for sumabs.
+    # Small sumabs => sparser; large sumabs => denser.
+    lo <- 1e-3
+    hi <- sqrt(m)  # fairly loose upper bound; can increase if needed
+
+    # Ensure hi is dense enough
+    out_hi <- nnz_of_sumabs(hi)
+    it_expand <- 0
+    while (mean(out_hi$nnz) < target_nnz && it_expand < 8) {
+      hi <- hi * 1.5
+      out_hi <- nnz_of_sumabs(hi)
+      it_expand <- it_expand + 1
+    }
+
+    # Binary search on sumabs
+    best <- out_hi
+    for (it in seq_len(max_iter)) {
+      mid <- 0.5 * (lo + hi)
+      out_mid <- nnz_of_sumabs(mid)
+
+      # keep best by absolute distance to target (mean-wise)
+      if (abs(out_mid$mean_nnz - target_nnz) < abs(best$mean_nnz - target_nnz)) best <- out_mid
+
+      if (out_mid$mean_nnz >= target_nnz) {
+        hi <- mid  # too dense or just right -> tighten
+      } else {
+        lo <- mid  # too sparse -> loosen
+      }
+    }
+
+    L <- best$fit$v
+    return(normalise_cols(matrix(L, nrow = m, ncol = ncol(L))))
   }
 }
+
 
 # SPLS for vectorial time series
-spls_alg <- function(
-  X,
-  K      = NULL,   # number of components
-  eta    = 0.6,    # main sparsity penalty (0 <= eta < 1, higher -> sparser)
-  kappa  = 0.1,    # ridge–lasso mixing (0 <= kappa < 0.5)
-  center = TRUE,
-  scale  = TRUE
-) {
-  if (!requireNamespace("spls", quietly = TRUE)) {
-    stop("Package 'spls' is required for method = 'spls'. Please install it.")
-  }
+# spls_alg <- function(
+#   X,
+#   K      = NULL,   # number of components
+#   eta    = 0.6,    # main sparsity penalty (0 <= eta < 1, higher -> sparser)
+#   kappa  = 0.1,    # ridge–lasso mixing (0 <= kappa < 0.5)
+#   center = TRUE,
+#   scale  = TRUE
+# ) {
+#   if (!requireNamespace("spls", quietly = TRUE)) {
+#     stop("Package 'spls' is required for method = 'spls'. Please install it.")
+#   }
 
-  Xc <- if (center || scale) scale(X, center = center, scale = scale) else X
-  n  <- nrow(Xc)
-  p  <- ncol(Xc)
+#   Xc <- if (center || scale) scale(X, center = center, scale = scale) else X
+#   n  <- nrow(Xc)
+#   p  <- ncol(Xc)
 
-  if (n < 2L) stop("Need at least 2 observations for SPLS (lag-1 construction).")
+#   if (n < 2L) stop("Need at least 2 observations for SPLS (lag-1 construction).")
 
-  ## lag-1: X_t -> X_{t+1}
-  X_lag  <- Xc[1:(n - 1L), , drop = FALSE] ; X_lag <- scale(X_lag, center = center, scale = FALSE)
-  Y_next <- Xc[2:n,         , drop = FALSE] ; Y_next <- scale(Y_next, center = center, scale = FALSE)
+#   ## lag-1: X_t -> X_{t+1}
+#   X_lag  <- Xc[1:(n - 1L), , drop = FALSE] ; X_lag <- scale(X_lag, center = center, scale = FALSE)
+#   Y_next <- Xc[2:n,         , drop = FALSE] ; Y_next <- scale(Y_next, center = center, scale = FALSE)
 
-  if (is.null(K)) {
-    K <- p #min(20L, p, n - 1L)
-  }
+#   if (is.null(K)) {
+#     K <- min(p, n - 1L)
+#   }
 
-  fit <- spls::spls(
-    x       = X_lag,
-    y       = Y_next,
-    K       = K,
-    eta     = eta,
-    kappa   = kappa,
-    scale.x = scale,
-    scale.y = scale
-    # fit = "oscorespls"
-  )
+#   fit <- spls::spls(
+#     x       = X_lag,
+#     y       = Y_next,
+#     K       = K,
+#     eta     = eta,
+#     kappa   = kappa,
+#     scale.x = scale,
+#     scale.y = scale
+#     # fit = "oscorespls"
+#   )
 
-  ## X-side sparse loadings (p x K)
-  if (!is.null(fit$projection)) {
-    PLS_w <- fit$projection
-  } else {
-    stop("spls::spls object does not contain 'projection'.")
-  }
+#   ## X-side sparse loadings (p x K)
+#   if (!is.null(fit$projection)) {
+#     PLS_w <- fit$projection
+#   } else {
+#     stop("spls::spls object does not contain 'projection'.")
+#   }
 
-  ## scores for X_lag
-  PLS_scores <- X_lag %*% PLS_w
+#   ## scores for X_lag
+#   PLS_scores <- X_lag %*% PLS_w
 
-  list(
-    PLS_scores = as.matrix(PLS_scores),
-    PLS_w      = as.matrix(PLS_w)
-  )
-}
+#   list(
+#     PLS_scores = as.matrix(PLS_scores),
+#     PLS_w      = as.matrix(PLS_w)
+#   )
+# }
 
 # SPLS using mixOmics package
 spls_alg_mixOmics <- function(
   X,
-  K      = NULL,   # number of components
+  K      = NULL,  # number of components
   etaX   = 0.6,   # sparsity for X
   etaY   = 0.6,   # sparsity for Y (smaller -> keep more Y’s)
-  kappa  = 0.1,    # unused here, kept for interface compatibility
   center = TRUE,
   scale  = TRUE
 ) {
@@ -565,7 +652,7 @@ spls_alg_mixOmics <- function(
   X_lag  <- scale(X_lag,  center = center, scale = FALSE)
   Y_next <- scale(Y_next, center = center, scale = FALSE)
 
-  if (is.null(K)) K <- min(p,nrow(X_lag))
+  if (is.null(K)) K <- min(p, nrow(X_lag))
 
   q <- ncol(Y_next)
 
@@ -586,9 +673,7 @@ spls_alg_mixOmics <- function(
     ncomp  = K,
     keepX  = keepX,
     keepY  = keepY,
-    mode   = "regression",
-    # scale  = FALSE,   # we've already scaled/centred above
-    # center = FALSE
+    mode   = "regression"
   )
 
   ## X-side sparse loadings (p x K) – analogous to your PLS_w
@@ -614,148 +699,263 @@ spls_alg_mixOmics <- function(
 
 
 # Alternative version of SPCA as a particular case of SPLS
-spca_alg_alternative <- function(
-  X,
-  K      = NULL,   # number of components
-  eta    = 0.6,    # main sparsity penalty (0 <= eta < 1, higher -> sparser)
-  center = TRUE,
-  scale  = TRUE
-) {
-  if (!requireNamespace("spls", quietly = TRUE)) {
-    stop("Package 'spls' is required for method = 'spls'. Please install it.")
-  }
+# spca_alg_alternative <- function(
+#   X,
+#   K      = NULL,   # number of components
+#   eta    = 0.6,    # main sparsity penalty (0 <= eta < 1, higher -> sparser)
+#   center = TRUE,
+#   scale  = TRUE
+# ) {
+#   if (!requireNamespace("spls", quietly = TRUE)) {
+#     stop("Package 'spls' is required for method = 'spls'. Please install it.")
+#   }
 
-  Xc <- if (center || scale) scale(X, center = center, scale = scale) else X
-  n  <- nrow(Xc)
-  p  <- ncol(Xc)
+#   Xc <- if (center || scale) scale(X, center = center, scale = scale) else X
+#   n  <- nrow(Xc)
+#   p  <- ncol(Xc)
 
-  if (n < 2L) stop("Need at least 2 observations for SPLS (lag-1 construction).")
+#   if (n < 2L) stop("Need at least 2 observations for SPLS (lag-1 construction).")
 
-  if (is.null(K)) {
-    K <- p #min(20L, p, n - 1L)
-  }
+#   if (is.null(K)) {
+#     K <- p #min(20L, p, n - 1L)
+#   }
 
-  fit <- spls::spls(
-    x       = Xc,
-    y       = Xc,
-    K       = K,
-    eta     = eta,
-    kappa   = 0.5, # special case of SPLS
-    scale.x = scale,
-    scale.y = scale
-    # fit = "oscorespls"
-  )
+#   fit <- spls::spls(
+#     x       = Xc,
+#     y       = Xc,
+#     K       = K,
+#     eta     = eta,
+#     kappa   = 0.5, # special case of SPLS
+#     scale.x = scale,
+#     scale.y = scale
+#     # fit = "oscorespls"
+#   )
 
-  ## X-side sparse loadings (p x K)
-  if (!is.null(fit$projection)) {
-    PCA_w <- fit$projection
-  } else {
-    stop("spls::spls object does not contain 'projection'.")
-  }
+#   ## X-side sparse loadings (p x K)
+#   if (!is.null(fit$projection)) {
+#     PCA_w <- fit$projection
+#   } else {
+#     stop("spls::spls object does not contain 'projection'.")
+#   }
 
-  ## scores for X_lag
-  PCA_scores <- Xc %*% PCA_w
+#   ## scores for X_lag
+#   PCA_scores <- Xc %*% PCA_w
 
-  list(
-    PCA_scores = as.matrix(PCA_scores),
-    PCA_w      = as.matrix(PCA_w)
-  )
-}
+#   list(
+#     PCA_scores = as.matrix(PCA_scores),
+#     PCA_w      = as.matrix(PCA_w)
+#   )
+# }
 
 
 # basis for stationary and nonstationary spaces
 basis_stable <- function(
   X, method = "pls", test = "kpss", alpha = 0.05,
   crit = "SC(n)", pct = "5pct", ec_det = "none",
-  # --- SPCA controls with safe defaults ---
+  # --- SPCA controls ---
   spca_engine = c("elasticnet", "PMA"),
   spca_sparse = c("varnum", "penalty"), # only for elasticnet
   spca_K = NULL,                        # number of sparse components
   spca_para = NULL,
   spca_eta = 0.6,                     # sparsity control (engine-specific)
-  spca_center = TRUE, 
+  spca_center = TRUE,
   spca_scale = TRUE,
-  # --- NEW: SPLS controls (penalty-based, spls package) ---
+  # --- SPLS controls ---
   spls_K      = NULL,   # number of components
   spls_eta    = 0.6,    # sparsity / L1-like penalty
-  spls_kappa  = 0.25,    # ridge–lasso mixing
   spls_center = TRUE,
   spls_scale  = TRUE
 ) {
+
   if (method == "pls") {
     # pls procedure
-    basis <- pls_alg(X)
+    basis <- pls_alg_plsr(X)
     T_scores <- basis$PLS_scores
     colnames(basis) <- NULL; rownames(basis) <- NULL
 
     if (test == "kpss") {
-      stationary_components <- apply(T_scores, 2, function(col) tseries::kpss.test(col)$p.value > alpha)
-      index_stationary <- which(stationary_components)
+      if (nrow(X) >= ncol(X)) {
+        stationary_components <- apply(T_scores, 2, function(col) tseries::kpss.test(col)$p.value > alpha)
+        index_stationary <- which(stationary_components)
 
-      if (length(stationary_components) > 0 && length(index_stationary) > 0) {
-        basis_S <- basis$PLS_w[, index_stationary, drop = FALSE]
-        basis_N <- basis$PLS_w[, - index_stationary, drop = FALSE]
-        scores_S <- T_scores[, index_stationary, drop = FALSE]
-        weights_S <- basis$PLS_vecs[, index_stationary, drop = FALSE]
-        weights_N <- basis$PLS_vecs[, - index_stationary, drop = FALSE]
-        return(list(
-          basis_S       = as.matrix(basis_S),
-          basis_N       = as.matrix(basis_N),
-          stable_scores = as.matrix(scores_S),
-          weights_S     = weights_S,
-          weights_N     = weights_N
-        ))
+        if (length(stationary_components) > 0 && length(index_stationary) > 0) {
+          basis_S <- basis$PLS_w[, index_stationary, drop = FALSE]
+          basis_N <- basis$PLS_w[, - index_stationary, drop = FALSE]
+          scores_S <- T_scores[, index_stationary, drop = FALSE]
+          weights_S <- basis$PLS_vecs[, index_stationary, drop = FALSE]
+          weights_N <- basis$PLS_vecs[, - index_stationary, drop = FALSE]
+          return(list(
+            basis_S       = as.matrix(basis_S),
+            basis_N       = as.matrix(basis_N),
+            stable_scores = as.matrix(scores_S),
+            weights_S     = weights_S,
+            weights_N     = weights_N
+          ))
+        } else {
+          return(list(basis_S = NULL, basis_N = basis$PLS_w, stable_scores = NULL))
+        }
       } else {
-        return(list(basis_S = NULL, basis_N = basis$PLS_w, stable_scores = NULL))
+        non_stationary_components <- apply(T_scores, 2, function(col) tseries::kpss.test(col)$p.value <= alpha)
+        index_non_stationary <- which(non_stationary_components)
+        if (length(non_stationary_components) > 0 && length(index_non_stationary) > 0) {
+          basis_N <- basis$PLS_w[, index_non_stationary, drop = FALSE]
+          scores_N <- T_scores[, index_non_stationary, drop = FALSE]
+          weights_N <- basis$PLS_vecs[, index_non_stationary, drop = FALSE]
+
+          # Orthonal complements
+          ## Basis
+          qr_basis_N <- qr(basis_N)
+          Q_basis_N <- qr.Q(qr_basis_N, complete = TRUE)
+          basis_S <- Q_basis_N[, (qr_basis_N$rank + 1):nrow(basis_N), drop = FALSE]
+          ## Weights
+          qr_weights_N <- qr(weights_N)
+          Q_weights_N <- qr.Q(qr_weights_N, complete = TRUE)
+          weights_S <- Q_weights_N[, (qr_weights_N$rank + 1):nrow(weights_N), drop = FALSE]
+          ## Scores
+          scores_S <- X %*% basis_S
+
+          return(list(
+            basis_S       = as.matrix(basis_S),
+            basis_N       = as.matrix(basis_N),
+            stable_scores = as.matrix(scores_S),
+            weights_S     = weights_S,
+            weights_N     = weights_N
+          ))
+        } else {
+          return(list(basis_S = basis$PLS_w, basis_N = NULL, stable_scores = as.matrix(T_scores)))
+        }
       }
     }
-    if (test == "adf") {
-      stationary_components <- apply(T_scores, 2, function(col) tseries::adf.test(col)$p.value < alpha)
-      index_stationary <- which(stationary_components)
 
-      if (length(stationary_components) > 0 && length(index_stationary) > 0) {
-        basis_S <- basis$PLS_w[, index_stationary, drop = FALSE]
-        basis_N <- basis$PLS_w[, - index_stationary, drop = FALSE]
-        scores_S <- T_scores[, index_stationary, drop = FALSE]
-        return(list(
-          basis_S       = as.matrix(basis_S),
-          basis_N       = as.matrix(basis_N),
-          stable_scores = as.matrix(scores_S)
-        ))
+    if (test == "adf") {
+      if (nrow(X) >= ncol(X)) {
+        stationary_components <- apply(T_scores, 2, function(col) tseries::adf.test(col)$p.value < alpha)
+        index_stationary <- which(stationary_components)
+
+        if (length(stationary_components) > 0 && length(index_stationary) > 0) {
+          basis_S <- basis$PLS_w[, index_stationary, drop = FALSE]
+          basis_N <- basis$PLS_w[, - index_stationary, drop = FALSE]
+          scores_S <- T_scores[, index_stationary, drop = FALSE]
+          weights_S <- basis$PLS_vecs[, index_stationary, drop = FALSE]
+          weights_N <- basis$PLS_vecs[, - index_stationary, drop = FALSE]
+          return(list(
+            basis_S       = as.matrix(basis_S),
+            basis_N       = as.matrix(basis_N),
+            stable_scores = as.matrix(scores_S),
+            weights_S     = weights_S,
+            weights_N     = weights_N
+          ))
+        } else {
+          return(list(basis_S = NULL, basis_N = basis$PLS_w, stable_scores = NULL))
+        }
+
       } else {
-        return(list(basis_S = NULL, basis_N = basis$PLS_w, stable_scores = NULL))
+        non_stationary_components <- apply(T_scores, 2, function(col) tseries::adf.test(col)$p.value >= alpha)
+        index_non_stationary <- which(non_stationary_components)
+
+        if (length(non_stationary_components) > 0 && length(index_non_stationary) > 0) {
+          basis_N <- basis$PLS_w[, index_non_stationary, drop = FALSE]
+          scores_N <- T_scores[, index_non_stationary, drop = FALSE]
+          weights_N <- basis$PLS_vecs[, index_non_stationary, drop = FALSE]
+
+          # Orthonal complements
+          ## Basis
+          qr_basis_N <- qr(basis_N)
+          Q_basis_N <- qr.Q(qr_basis_N, complete = TRUE)
+          basis_S <- Q_basis_N[, (qr_basis_N$rank + 1):nrow(basis_N), drop = FALSE]
+          ## Weights
+          qr_weights_N <- qr(weights_N)
+          Q_weights_N <- qr.Q(qr_weights_N, complete = TRUE)
+          weights_S <- Q_weights_N[, (qr_weights_N$rank + 1):nrow(weights_N), drop = FALSE]
+          ## Scores
+          scores_S <- X %*% basis_S
+
+          return(list(
+            basis_S       = as.matrix(basis_S),
+            basis_N       = as.matrix(basis_N),
+            stable_scores = as.matrix(scores_S),
+            weights_S     = weights_S,
+            weights_N     = weights_N
+          ))
+        } else {
+          return(list(
+            basis_S       = as.matrix(basis$PLS_w),
+            basis_N       = NULL,
+            stable_scores = as.matrix(T_scores),
+            weights_S     = basis$PLS_vecs,
+            weights_N     = NULL
+          ))
+        }
       }
     }
   }
 
   if (method == "pca") {
     # pca method
-    basis <- pca_alg(X)
-    # colnames(basis) <- NULL;
-    # rownames(basis) <- NULL
-    proy_X <- X%*%basis
+    basis <- pca_alg_prcomp(X)
+    proy_X <- X %*% basis$PC_loadings
 
     if (test == "kpss") {
-      stationary_components <- apply(proy_X, 2, function(col) tseries::kpss.test(col)$p.value > alpha)
-      index_stationary <- which(stationary_components)
-      if (length(stationary_components) > 0 && length(index_stationary) > 0) {
-        basis_S <- basis[, index_stationary, drop = FALSE]
-        basis_N <- basis[, - index_stationary, drop = FALSE]
-        return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N)))
+      if (nrow(X) >= ncol(X)) {
+        stationary_components <- apply(proy_X, 2, function(col) tseries::kpss.test(col)$p.value > alpha)
+        index_stationary <- which(stationary_components)
+
+        if (length(stationary_components) > 0 && length(index_stationary) > 0) {
+          basis_S <- basis$PC_loadings[, index_stationary, drop = FALSE]
+          basis_N <- basis$PC_loadings[, -index_stationary, drop = FALSE]
+          return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N)))
+        } else {
+          return(list(basis_S = NULL, basis_N = basis$PC_loadings))
+        }
+
       } else {
-        return(list(basis_S = NULL, basis_N = basis))
+        non_stationary_components <- apply(proy_X, 2, function(col) tseries::kpss.test(col)$p.value <= alpha)
+        index_non_stationary <- which(non_stationary_components)
+
+        if (length(non_stationary_components) > 0 && length(index_non_stationary) > 0) {
+          basis_N <- basis$PC_loadings[, index_non_stationary, drop = FALSE]
+
+          # Orthogonal complement for basis_S
+          qr_basis_N <- qr(basis_N)
+          Q_basis_N <- qr.Q(qr_basis_N, complete = TRUE)
+          basis_S <- Q_basis_N[, (qr_basis_N$rank + 1):nrow(basis_N), drop = FALSE]
+
+          return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N)))
+        } else {
+          return(list(basis_S = as.matrix(basis$PC_loadings), basis_N = NULL))
+        }
       }
     }
 
     if (test == "adf") {
-      stationary_components <- apply(proy_X, 2, function(col) tseries::adf.test(col)$p.value < alpha)
-      index_stationary <- which(stationary_components)
-      if (length(stationary_components) > 0 && length(index_stationary) > 0) {
-        basis_S <- basis$PC_loadings[, index_stationary, drop = FALSE]
-        basis_N <- basis$PC_loadings[, - index_stationary, drop = FALSE]
-        return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N)))
+      if (nrow(X) >= ncol(X)) {
+        stationary_components <- apply(proy_X, 2, function(col) tseries::adf.test(col)$p.value < alpha)
+        index_stationary <- which(stationary_components)
+
+        if (length(stationary_components) > 0 && length(index_stationary) > 0) {
+          basis_S <- basis$PC_loadings[, index_stationary, drop = FALSE]
+          basis_N <- basis$PC_loadings[, -index_stationary, drop = FALSE]
+          return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N)))
+        } else {
+          return(list(basis_S = NULL, basis_N = basis$PC_loadings))
+        }
+
       } else {
-        return(list(basis_S = NULL, basis_N = basis))
+        non_stationary_components <- apply(proy_X, 2, function(col) tseries::adf.test(col)$p.value >= alpha)
+        index_non_stationary <- which(non_stationary_components)
+
+        if (length(non_stationary_components) > 0 && length(index_non_stationary) > 0) {
+          basis_N <- basis$PC_loadings[, index_non_stationary, drop = FALSE]
+
+          # Orthogonal complement for basis_S
+          qr_basis_N <- qr(basis_N)
+          Q_basis_N <- qr.Q(qr_basis_N, complete = TRUE)
+          basis_S <- Q_basis_N[, (qr_basis_N$rank + 1):nrow(basis_N), drop = FALSE]
+
+          return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N)))
+        } else {
+          return(list(basis_S = as.matrix(basis$PC_loadings), basis_N = NULL))
+        }
       }
     }
   }
@@ -763,23 +963,13 @@ basis_stable <- function(
   if (method == "spca") {
     engine <- match.arg(spca_engine)
     sparse <- match.arg(spca_sparse)
-    ## NEW: SPCA via spls::spls (elastic-net-like)
-    # basis <- spca_alg_alternative(
-    #   X,
-    #   K      = spca_K,
-    #   eta    = spca_eta,
-    #   center = spca_center,
-    #   scale  = spca_scale
-    # )
-    # T_scores <- basis$PCA_scores
 
     basis <- spca_alg(
-      X, k = spca_K, para = spca_para, center = spca_center, scale = spca_scale,
-      engine = engine, sparse = sparse
+      X, k = spca_K, center = spca_center, scale = spca_scale,
+      engine = engine, sparse = sparse, prop = spca_eta
     )
     colnames(basis) <- NULL ; rownames(basis) <- NULL
     Xc <- if (spca_center || spca_scale) scale(X, center = spca_center, scale = spca_scale) else X
-    # proy_X <- Xc %*% basis
     T_scores <- Xc %*% basis
 
     if (test == "kpss") {
@@ -809,57 +999,136 @@ basis_stable <- function(
   }
 
   if (method == "spls") {
-    ## NEW: SPLS via spls::spls (elastic-net-like)
     basis <- spls_alg_mixOmics(
       X,
       K      = spls_K,
-      etaX    = spls_eta,
-      etaY    = spls_eta,  # same sparsity for Y
-      kappa  = spls_kappa,       # spca particular case of spls with kappa = 0.5
+      etaX   = spls_eta,
+      etaY   = spls_eta,
       center = spls_center,
       scale  = spls_scale
     )
     T_scores <- basis$PLS_scores
-
     if (test == "kpss") {
-      stationary_components <- apply(T_scores, 2, function(col) tseries::kpss.test(col)$p.value > alpha)
-      index_stationary <- which(stationary_components)
+      if (nrow(X) >= ncol(X)) {
+        stationary_components <- apply(T_scores, 2, function(col) tseries::kpss.test(col)$p.value > alpha)
+        index_stationary <- which(stationary_components)
 
-      if (length(stationary_components) > 0 && length(index_stationary) > 0) {
-        basis_S   <- basis$PLS_w[, index_stationary, drop = FALSE]
-        basis_N   <- basis$PLS_w[, - index_stationary, drop = FALSE]
-        scores_S  <- T_scores[, index_stationary, drop = FALSE]
-        weights_S <- basis$PLS_vecs[, index_stationary, drop = FALSE]
-        weights_N <- basis$PLS_vecs[, - index_stationary, drop = FALSE]
+        if (length(stationary_components) > 0 && length(index_stationary) > 0) {
+          basis_S   <- basis$PLS_w[, index_stationary, drop = FALSE]
+          basis_N   <- basis$PLS_w[, -index_stationary, drop = FALSE]
+          scores_S  <- T_scores[, index_stationary, drop = FALSE]
+          # weights_S <- basis$PLS_vecs[, index_stationary, drop = FALSE]
+          # weights_N <- basis$PLS_vecs[, -index_stationary, drop = FALSE]
 
-        return(list(
-          basis_S       = as.matrix(basis_S),
-          basis_N       = as.matrix(basis_N),
-          stable_scores = as.matrix(scores_S),
-          weights_S     = weights_S,
-          weights_N     = weights_N
-        ))
+          return(list(
+            basis_S       = as.matrix(basis_S),
+            basis_N       = as.matrix(basis_N),
+            stable_scores = as.matrix(scores_S)
+            # weights_S     = weights_S,
+            # weights_N     = weights_N
+          ))
+        } else {
+          return(list(basis_S = NULL, basis_N = basis$PLS_w, stable_scores = NULL))
+        }
+
       } else {
-        return(list(basis_S = NULL, basis_N = basis$PLS_w, stable_scores = NULL))
+        non_stationary_components <- apply(T_scores, 2, function(col) tseries::kpss.test(col)$p.value <= alpha)
+        index_non_stationary <- which(non_stationary_components)
+
+        if (length(non_stationary_components) > 0 && length(index_non_stationary) > 0) {
+          basis_N   <- basis$PLS_w[, index_non_stationary, drop = FALSE]
+          # weights_N <- basis$PLS_vecs[, index_non_stationary, drop = FALSE]
+
+          # Orthonal complements
+          ## Basis
+          qr_basis_N <- qr(basis_N)
+          Q_basis_N <- qr.Q(qr_basis_N, complete = TRUE)
+          basis_S <- Q_basis_N[, (qr_basis_N$rank + 1):nrow(basis_N), drop = FALSE]
+          ## Weights
+          # qr_weights_N <- qr(weights_N)
+          # Q_weights_N <- qr.Q(qr_weights_N, complete = TRUE)
+          # weights_S <- Q_weights_N[, (qr_weights_N$rank + 1):nrow(weights_N), drop = FALSE]
+          ## Scores
+          scores_S <- X %*% basis_S
+
+          return(list(
+            basis_S       = as.matrix(basis_S),
+            basis_N       = as.matrix(basis_N),
+            stable_scores = as.matrix(scores_S)
+            # weights_S     = weights_S,
+            # weights_N     = weights_N
+          ))
+        } else {
+          return(list(
+            basis_S       = as.matrix(basis$PLS_w),
+            basis_N       = NULL,
+            stable_scores = as.matrix(T_scores)
+            # weights_S     = basis$PLS_vecs,
+            # weights_N     = NULL
+          ))
+        }
       }
     }
 
     if (test == "adf") {
-      stationary_components <- apply(T_scores, 2, function(col) tseries::adf.test(col)$p.value < alpha)
-      index_stationary <- which(stationary_components)
+      if (nrow(X) >= ncol(X)) {
+        stationary_components <- apply(T_scores, 2, function(col) tseries::adf.test(col)$p.value < alpha)
+        index_stationary <- which(stationary_components)
 
-      if (length(stationary_components) > 0 && length(index_stationary) > 0) {
-        basis_S   <- basis$PLS_w[, index_stationary, drop = FALSE]
-        basis_N   <- basis$PLS_w[, - index_stationary, drop = FALSE]
-        scores_S  <- T_scores[, index_stationary, drop = FALSE]
+        if (length(stationary_components) > 0 && length(index_stationary) > 0) {
+          basis_S   <- basis$PLS_w[, index_stationary, drop = FALSE]
+          basis_N   <- basis$PLS_w[, - index_stationary, drop = FALSE]
+          scores_S  <- T_scores[, index_stationary, drop = FALSE]
+          # weights_S <- basis$PLS_vecs[, index_stationary, drop = FALSE]
+          # weights_N <- basis$PLS_vecs[, - index_stationary, drop = FALSE]
 
-        return(list(
-          basis_S       = as.matrix(basis_S),
-          basis_N       = as.matrix(basis_N),
-          stable_scores = as.matrix(scores_S)
-        ))
+          return(list(
+            basis_S       = as.matrix(basis_S),
+            basis_N       = as.matrix(basis_N),
+            stable_scores = as.matrix(scores_S)
+            # weights_S     = weights_S,
+            # weights_N     = weights_N
+          ))
+        } else {
+          return(list(basis_S = NULL, basis_N = basis$PLS_w, stable_scores = NULL))
+        }
+
       } else {
-        return(list(basis_S = NULL, basis_N = basis$PLS_w, stable_scores = NULL))
+        non_stationary_components <- apply(T_scores, 2, function(col) tseries::adf.test(col)$p.value >= alpha)
+        index_non_stationary <- which(non_stationary_components)
+
+        if (length(non_stationary_components) > 0 && length(index_non_stationary) > 0) {
+          basis_N   <- basis$PLS_w[, index_non_stationary, drop = FALSE]
+          # weights_N <- basis$PLS_vecs[, index_non_stationary, drop = FALSE]
+
+          # Orthonal complements
+          ## Basis
+          qr_basis_N <- qr(basis_N)
+          Q_basis_N <- qr.Q(qr_basis_N, complete = TRUE)
+          basis_S <- Q_basis_N[, (qr_basis_N$rank + 1):nrow(basis_N), drop = FALSE]
+          ## Weights
+          # qr_weights_N <- qr(weights_N)
+          # Q_weights_N <- qr.Q(qr_weights_N, complete = TRUE)
+          # weights_S <- Q_weights_N[, (qr_weights_N$rank + 1):nrow(weights_N), drop = FALSE]
+          ## Scores
+          scores_S <- X %*% basis_S
+
+          return(list(
+            basis_S       = as.matrix(basis_S),
+            basis_N       = as.matrix(basis_N),
+            stable_scores = as.matrix(scores_S)
+            # weights_S     = weights_S,
+            # weights_N     = weights_N
+          ))
+        } else {
+          return(list(
+            basis_S       = as.matrix(basis$PLS_w),
+            basis_N       = NULL,
+            stable_scores = as.matrix(T_scores)
+            # weights_S     = basis$PLS_vecs,
+            # weights_N     = NULL
+          ))
+        }
       }
     }
   }
@@ -879,138 +1148,6 @@ basis_stable <- function(
     return(list(basis_S = basis_S, basis_N = basis_N))
   }
 }
-
-
-# basis for stationary and nonstationary spaces
-# basis_stable <- function(
-#   X, method = "pls", test = "kpss", alpha = 0.05,
-#   crit = "SC(n)", pct = "5pct", ec_det = "none",
-# # --- new: spca controls with safe defaults ---
-#   spca_engine = c("elasticnet", "PMA"),
-#   spca_sparse = c("varnum", "penalty"), # only for elasticnet
-#   spca_k = NULL, # number of sparse components (defaults to ncol(X))
-#   spca_para = NULL, # sparsity control (engine-specific; see spca_alg docs below)
-#   spca_center = FALSE, spca_scale = FALSE
-# ) {
-#   if (method == "pls") {
-#     # pls procedure
-#     basis <- pls_alg(X)
-#     T_scores <- basis$PLS_scores
-#     colnames(basis) <- NULL;
-#     rownames(basis) <- NULL
-
-#     if (test == "kpss") {
-#       stationary_components <- apply(T_scores, 2, function(col) tseries::kpss.test(col)$p.value > alpha)
-#       index_stationary <- which(stationary_components)
-
-#       if (length(stationary_components) > 0) {
-#         basis_S <- basis$PLS_w[, index_stationary]
-#         basis_N <- basis$PLS_w[, - index_stationary]
-#         scores_S <- T_scores[, index_stationary]
-#         weights_S <- basis$PLS_vecs[, index_stationary]
-#         weights_N <- basis$PLS_vecs[, - index_stationary]
-#         return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N), stable_scores = as.matrix(scores_S),
-#                     weights_S = weights_S, weights_N = weights_N))
-#       } else {
-#         return(list(basis_S = NULL, basis_N = basis$PLS_w, stable_scores = NULL))
-#       }
-#     }
-#     if (test == "adf") {
-#       stationary_components <- apply(T_scores, 2, function(col) tseries::adf.test(col)$p.value < alpha)
-#       index_stationary <- which(stationary_components)
-
-#       if (length(stationary_components) > 0) {
-#         basis_S <- basis$PLS_w[, index_stationary]
-#         basis_N <- basis$PLS_w[, - index_stationary]
-#         scores_S <- T_scores[, index_stationary]
-#         return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N), stable_scores = as.matrix(scores_S)))
-#       } else {
-#         return(list(basis_S = NULL, basis_N = basis$PLS_w, stable_scores = NULL))
-#       }
-#     }
-#   }
-
-#   if (method == "pca") {
-#     # pca method
-#     basis <- pca_alg(X)
-#     colnames(basis) <- NULL;
-#     rownames(basis) <- NULL
-#     proy_X <- X %*% basis
-
-#     if (test == "kpss") {
-#       stationary_components <- apply(proy_X, 2, function(col) tseries::kpss.test(col)$p.value > alpha)
-#       index_stationary <- which(stationary_components)
-#       if (length(stationary_components) > 0) {
-#         basis_S <- basis[, index_stationary]
-#         basis_N <- basis[, - index_stationary]
-#         return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N)))
-#       } else {
-#         return(list(basis_S = NULL, basis_N = basis))
-#       }
-#     }
-
-#     if (test == "adf") {
-#       stationary_components <- apply(proy_X, 2, function(col) tseries::adf.test(col)$p.value < alpha)
-#       index_stationary <- which(stationary_components)
-#       if (length(stationary_components) > 0) {
-#         basis_S <- basis[, index_stationary]
-#         basis_N <- basis[, - index_stationary]
-#         return(list(basis_S = as.matrix(basis_S), basis_N = as.matrix(basis_N)))
-#       } else {
-#         return(list(basis_S = NULL, basis_N = basis))
-#       }
-#     }
-#   }
-
-#   if (method == "spca") {
-#     engine <- match.arg(spca_engine)
-#     sparse <- match.arg(spca_sparse)
-#     basis <- spca_alg(
-#       X, k = spca_k, para = spca_para, center = spca_center, scale = spca_scale,
-#       engine = engine, sparse = sparse
-#     )
-#     colnames(basis) <- NULL ; rownames(basis) <- NULL
-#     Xc <- if (spca_center || spca_scale) scale(X, center = spca_center, scale = spca_scale) else X
-#     proy_X <- Xc %*% basis
-
-#     if (test == "kpss") {
-#       stationary_components <- apply(proy_X,2,function(col) tseries::kpss.test(col)$p.value>alpha)
-#       idx <- which(stationary_components)
-#       if(length(stationary_components)>0 && length(idx)>0){
-#         return(list(basis_S = as.matrix(basis[,idx, drop=FALSE]),
-#                     basis_N = as.matrix(basis[,-idx, drop=FALSE])))
-#       } else {
-#         return(list(basis_S=NULL, basis_N = basis))
-#       }
-#     }
-#     if (test == "adf") {
-#       stationary_components <- apply(proy_X,2,function(col) tseries::adf.test(col)$p.value<alpha)
-#       idx <- which(stationary_components)
-#       if(length(stationary_components)>0 && length(idx)>0){
-#         return(list(basis_S = as.matrix(basis[,idx, drop=FALSE]),
-#                     basis_N = as.matrix(basis[,-idx, drop=FALSE])))
-#       } else {
-#         return(list(basis_S=NULL, basis_N = basis))
-#       }
-#     }
-#   }
-
-#   if (method == "johansen") {
-#     m <- ncol(X)
-#     joha <- ca.jo(scale(X, center = TRUE, scale = TRUE), K = 2, ecdet = ec_det)
-#     basis <- joha$Vorg
-#     basis <- apply(basis, 2, function(x) x / sqrt(sum(x ^ 2)))
-#     colnames(basis) <- NULL;
-#     rownames(basis) <- NULL
-#     r_joha <- which(rev(joha$teststat) < rev(joha$cval[, pct]))[1] - 1
-#     if (is.na(r_joha)) r_joha <- m
-#     basis_S <- as.matrix(basis[, 1:r_joha]);
-#     basis_N <- NULL
-#     if (r_joha < m) basis_N <- as.matrix(basis[, (r_joha + 1):ncol(basis)])
-#     return(list(basis_S = basis_S, basis_N = basis_N))
-#   }
-# }
-
 
 # scores rebuilt
 scores_rebuilt <- function(scores, Y = NULL, method = "reg") {
