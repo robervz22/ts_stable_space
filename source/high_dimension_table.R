@@ -12,28 +12,29 @@ source("./source/simulations.R")
 # Parameters #
 ##############
 m <- 300
-r_values <- c(250,200,150)
-i_values <- matrix(c(300,0,250,10,200,20,150,30),nrow=4,ncol=2,byrow = TRUE)
+r_values <- c(275,250,225)
+i_values <- matrix(c(300,0,250,10,240,20,230,30),nrow=4,ncol=2,byrow = TRUE)
 rownames(i_values) <- c('Case 1','Case 2','Case 3','Case 4')
 Tt <- 100 # series length
-S <- 1 # number of simulation
+S <- 100 # number of simulation
 persistence <- "low" ; dist <- "t" # persistence and innovation process distribution
 dependence <- TRUE
 seeds <- c(1,1) # seeds for reproducibility
-spca_sparse <- "penalty"  # type of sparsity: "penalty" or "varnum"
-spca_para <- 0.125 # sparsity parameter for SPCA
+spca_sparse <- "varnum"  # type of sparsity: "penalty" or "varnum"
 spca_engine <- "elasticnet" # type of sparsity and engine for SPCA
-spca_eta <- 0.125
+spca_eta <- 0.6
 spls_eta    <- spca_eta  # e.g. reuse SPCA penalty; or set manually, e.g. 0.6
-spls_kappa  <- 0.25      # ridge–lasso mixing
-methods <- c("SPCA","SPLS") # methods to consider
-###############################################
+methods <- c("PCA","PLS","SPCA","SPLS") # methods to consider
+
+################################################
 # Produce table for high-dimensional scenarios #
-###############################################
+################################################
 df_high_dimension <- run_simulation(seeds,m,r_values,i_values,Tt,S,
                     dist = dist, persistence = persistence, dependence = dependence, burnin = 100, methods = methods,
                     spca_sparse = spca_sparse, spca_para = spca_para,  spca_engine = spca_engine,
-                    spca_eta = spca_eta, spls_eta = spls_eta, spls_kappa = spls_kappa)
+                    spca_eta = spca_eta, spls_eta = spls_eta,
+                    parallel = TRUE,
+                    n_cores  = NULL)
 
                 
 dt_high_dimension <- as.data.table(df_high_dimension)
@@ -66,9 +67,12 @@ dt_wide_dimension <- dcast(dt_table, Method + r ~ Case, value.var = "Dimension")
 setorder(dt_wide_subspace,-r)
 setorder(dt_wide_dimension,-r)
 
-# Print as LaTeX table
-print(xtable(dt_wide_subspace, align = paste0("lrl", paste(rep("r", ncol(dt_wide_subspace) - 2), collapse = ""))),
-      include.rownames = FALSE)
+# Save LaTeX tables as .txt files
+latex_subspace <- capture.output(print(xtable(dt_wide_subspace, align = paste0("lrl", paste(rep("r", ncol(dt_wide_subspace) - 2), collapse = ""))),
+      include.rownames = FALSE))
 
-print(xtable(dt_wide_dimension, align = paste0("lrl", paste(rep("r", ncol(dt_wide_dimension) - 2), collapse = ""))),
-      include.rownames = FALSE)
+latex_dimension <- capture.output(print(xtable(dt_wide_dimension, align = paste0("lrl", paste(rep("r", ncol(dt_wide_dimension) - 2), collapse = ""))),
+      include.rownames = FALSE))
+
+writeLines(latex_subspace, "./tables/high_dimension_subspace.txt")
+writeLines(latex_dimension, "./tables/high_dimension_dimension.txt")

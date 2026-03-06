@@ -66,9 +66,12 @@ dt_wide_dimension <- dcast(dt_table, Method + r ~ Case, value.var = "Dimension")
 setorder(dt_wide_subspace,-r)
 setorder(dt_wide_dimension,-r)
 
-# Print as LaTeX table
-print(xtable(dt_wide_subspace, align = paste0("lrl", paste(rep("r", ncol(dt_wide_subspace) - 2), collapse = ""))),
-      include.rownames = FALSE)
+# Save LaTeX tables as .txt files
+latex_subspace <- capture.output(print(xtable(dt_wide_subspace, align = paste0("lrl", paste(rep("r", ncol(dt_wide_subspace) - 2), collapse = ""))),
+      include.rownames = FALSE))
 
-print(xtable(dt_wide_dimension, align = paste0("lrl", paste(rep("r", ncol(dt_wide_dimension) - 2), collapse = ""))),
-      include.rownames = FALSE)
+latex_dimension <- capture.output(print(xtable(dt_wide_dimension, align = paste0("lrl", paste(rep("r", ncol(dt_wide_dimension) - 2), collapse = ""))),
+      include.rownames = FALSE))
+
+writeLines(latex_subspace, "./tables/low_dimension_subspace.txt")
+writeLines(latex_dimension, "./tables/low_dimension_dimension.txt")

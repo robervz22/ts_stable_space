@@ -458,7 +458,7 @@ spca_alg <- function(
   engine <- match.arg(engine)
   Xc <- if (center || scale) scale(X, center = center, scale = scale) else X
   m <- ncol(Xc)
-  if (is.null(k)) k <- m
+  if (is.null(k)) k <- min(m, nrow(X))
 
   # ---- helper: column normalisation ----
   normalise_cols <- function(L) {
@@ -498,7 +498,7 @@ spca_alg <- function(
       if (length(para) == 1) para <- rep(para, k)
     }
 
-    fit <- if (k > nrow(X)) {
+    fit <- if (ncol(X) > nrow(X)) {
       elasticnet::arrayspc(G, K = k, para = para)
     } else {
       elasticnet::spca(G, K = k, type = "Gram", sparse = sparse, para = para)
@@ -973,27 +973,74 @@ basis_stable <- function(
     T_scores <- Xc %*% basis
 
     if (test == "kpss") {
-      stationary_components <- apply(T_scores,2,function(col) tseries::kpss.test(col)$p.value > alpha)
-      idx <- which(stationary_components)
-      if (length(stationary_components) > 0 && length(idx) > 0) {
-        return(list(
-          basis_S = as.matrix(basis[, idx, drop = FALSE]),
-          basis_N = as.matrix(basis[, -idx, drop = FALSE])
-        ))
+      if (nrow(X) >= ncol(X)) {
+        stationary_components <- apply(T_scores, 2, function(col) tseries::kpss.test(col)$p.value > alpha)
+        idx <- which(stationary_components)
+        if (length(stationary_components) > 0 && length(idx) > 0) {
+          return(list(
+            basis_S = as.matrix(basis[, idx, drop = FALSE]),
+            basis_N = as.matrix(basis[, -idx, drop = FALSE])
+          ))
+        } else {
+          return(list(basis_S = NULL, basis_N = basis))
+        }
       } else {
-        return(list(basis_S = NULL, basis_N = basis))
+        non_stationary_components <- apply(T_scores, 2, function(col) tseries::kpss.test(col)$p.value <= alpha)
+        idx <- which(non_stationary_components)
+        if (length(non_stationary_components) > 0 && length(idx) > 0) {
+          basis_N <- basis[, idx, drop = FALSE]
+
+          # Orthogonal complement for basis_S
+          qr_basis_N <- qr(basis_N)
+          Q_basis_N <- qr.Q(qr_basis_N, complete = TRUE)
+          basis_S <- Q_basis_N[, (qr_basis_N$rank + 1):nrow(basis_N), drop = FALSE]
+
+          return(list(
+            basis_S = as.matrix(basis_S),
+            basis_N = as.matrix(basis_N)
+          ))
+        } else {
+          return(list(
+            basis_S = as.matrix(basis),
+            basis_N = NULL
+          ))
+        }
       }
     }
+
     if (test == "adf") {
-      stationary_components <- apply(T_scores,2,function(col) tseries::adf.test(col)$p.value < alpha)
-      idx <- which(stationary_components)
-      if (length(stationary_components) > 0 && length(idx) > 0) {
-        return(list(
-          basis_S = as.matrix(basis$PCA_w[, idx, drop = FALSE]),
-          basis_N = as.matrix(basis$PCA_w[, -idx, drop = FALSE])
-        ))
+      if (nrow(X) >= ncol(X)) {
+        stationary_components <- apply(T_scores, 2, function(col) tseries::adf.test(col)$p.value < alpha)
+        idx <- which(stationary_components)
+        if (length(stationary_components) > 0 && length(idx) > 0) {
+          return(list(
+            basis_S = as.matrix(basis[, idx, drop = FALSE]),
+            basis_N = as.matrix(basis[, -idx, drop = FALSE])
+          ))
+        } else {
+          return(list(basis_S = NULL, basis_N = basis))
+        }
       } else {
-        return(list(basis_S = NULL, basis_N = basis))
+        non_stationary_components <- apply(T_scores, 2, function(col) tseries::adf.test(col)$p.value >= alpha)
+        idx <- which(non_stationary_components)
+        if (length(non_stationary_components) > 0 && length(idx) > 0) {
+          basis_N <- basis[, idx, drop = FALSE]
+
+          # Orthogonal complement for basis_S
+          qr_basis_N <- qr(basis_N)
+          Q_basis_N <- qr.Q(qr_basis_N, complete = TRUE)
+          basis_S <- Q_basis_N[, (qr_basis_N$rank + 1):nrow(basis_N), drop = FALSE]
+
+          return(list(
+            basis_S = as.matrix(basis_S),
+            basis_N = as.matrix(basis_N)
+          ))
+        } else {
+          return(list(
+            basis_S = as.matrix(basis),
+            basis_N = NULL
+          ))
+        }
       }
     }
   }

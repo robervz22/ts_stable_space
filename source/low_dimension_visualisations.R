@@ -25,12 +25,9 @@ dependence <- TRUE # if we consider a covariance structure in the innovation pro
 seeds <- c(1,1) # seeds for reproducibility
 sigma <- 1 # equal variance for the non-correlated case
 spca_sparse <- "varnum"  # type of sparsity: "penalty" or "varnum"
-spca_para <- 0.25 # sparsity parameter for SPCA
-# -------- important: new SPCA and SPLS parameters --------
 spca_engine <- "elasticnet" # type of sparsity and engine for SPCA
 spca_eta <- 0.6
 spls_eta    <- spca_eta   # e.g. reuse SPCA penalty; or set manually, e.g. 0.6
-spls_kappa  <- 0.25        # ridge–lasso mixing
 
 methods_colors <- c(
   "Johansen" = "#E69F00",  # orange
@@ -130,8 +127,7 @@ for (pair in values_pairs) {
       basis_SPLS <- basis_stable(
         X, method = "spls", test = test,
         # spls_K      = spls_K,
-        spls_eta    = spls_eta,
-        spls_kappa  = spls_kappa
+        spls_eta    = spls_eta
       )
 
       ## PLS
@@ -268,7 +264,3 @@ ggsave(
   plot     = violin_grid,
   width    = 32, height = 16, units = "in", dpi = 300
 )
-
-
-
-
