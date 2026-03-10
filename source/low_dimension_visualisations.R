@@ -264,3 +264,15 @@ ggsave(
   plot     = violin_grid,
   width    = 32, height = 16, units = "in", dpi = 300
 )
+
+ggsave(
+  filename = "./images/Fig1.eps",
+  plot     = bar_grid,
+  width    = 32, height = 16, units = "in", device = "eps", dpi = 1200
+)
+
+ggsave(
+  filename = "./images/Fig2.eps",
+  plot     = violin_grid,
+  width    = 32, height = 16, units = "in", device = "eps", dpi = 1200
+)
