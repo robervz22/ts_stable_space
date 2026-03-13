@@ -64,7 +64,6 @@ basis_inflation_PLS <- basis_stable(X_inflation,method = "pls")
 basis_inflation_PCA <- basis_stable(scale(X_inflation),method="pca")
 
 # SPCA
-spca_para <- 1
 spca_eta <- 0.6
 basis_inflation_SPCA <- basis_stable(X_inflation,method = "spca", 
                                         spca_engine = "elasticnet",
