@@ -37,7 +37,7 @@ The repository contains four main directories:
 
 ## Usage
 
-To run the notebooks in the `notebooks` directory and the scripts in the `source` directory, use `R` version `4.1.2`.
+To run the notebooks in the `notebooks` directory and the scripts in the `source` directory, use `R` version `4.3.3`.
 
 Enjoy it ☕
 
