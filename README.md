@@ -14,13 +14,20 @@ A code repository to reproduce the results presented in the paper _Over the Stab
 
 The repository contains four main directories:
 
-- `source`: This directory contains the source code for the algorithms implemented based on the article _Over the Stability Space of a Multivariate Time Series_. It includes the following files:
+- `source`: This directory contains the source code for the algorithms implemented based on the article _Over the Stable Space of a Multivariate Time Series_. It includes the following files:
 
 > `vectorial_methods.R`: Implements the three methodologies proposed in the article for estimating the stable space of a multivariate time series.
 >
 > `simulations.R`: Contains the main functions required to reproduce the simulation study presented in the article.
 >
 > `auxiliar_methods.R`: Includes auxiliary functions for visualisation and error estimation.
+>
+> `high_dimension_table.R` Runs the high-dimensional simulation study and obtains the results.
+>
+> `low_dimensional_table.R` Runs the low-dimensional simulation study and obtains the results.
+>
+> `low_dimensional_visualisations.R` Obtains the plots for the low-dimensional scenarios visualisation.
+> `plots_cum_rmse.R` Produces the plots for the cumulative RMSE presented in the practical examples.
 
 - `notebooks`: This directory contains Jupyter notebooks that demonstrate the use of the source code and provide step-by-step instructions to reproduce the various tables and figures from the paper.
 
@@ -53,21 +60,27 @@ Then, we run the following code lines—each corresponds to one of the methods:
 
 ```R
 # PLS, PCA
-basis_inflation_PLS <- basis_stable(X_inflation, method = "pls")
-basis_inflation_PCA <- basis_stable(scale(X_inflation), method="pca")
+basis_inflation_PLS <- basis_stable(X_inflation,method = "pls")
+basis_inflation_PCA <- basis_stable(scale(X_inflation),method="pca")
 
 # SPCA
 spca_para <- 1
-basis_inflation_SPCA <- basis_stable(scale(X_inflation),method = "spca",
+spca_eta <- 0.6
+basis_inflation_SPCA <- basis_stable(X_inflation,method = "spca", 
                                         spca_engine = "elasticnet",
-                                        spca_sparse = "penalty",
-                                        spca_para = spca_para)
+                                        spca_eta = spca_eta)
+
+
+# SPLS
+spls_eta <- spca_eta 
+basis_inflation_SPLS <- basis_stable(X_inflation,method = "spls", 
+                                        spls_eta = spls_eta)
 
 # Johansen
-basis_inflation_johansen <- basis_stable(X_inflation, method = "johansen")
+basis_inflation_johansen <- basis_stable(scale(X_inflation),method = "johansen")
 ```
 
-Each `basis_inflation_...` object contains two elements: `basis_S` and `basis_N`, which represent the estimators of the stable space and the non-stable space basis, respectively.
+Each `basis_inflation_...` object contains two elements: `basis_S` and `basis_N`, which represent the estimators of the stable space and the unstable space basis, respectively.
 
 ## Contributing
 
